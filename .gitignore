@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+refresh_token.txt
+access_token.txt
+spotify_recent_500.json
+.env
