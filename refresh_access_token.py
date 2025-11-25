@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Helper to turn a refresh_token into an access_token.txt file for local mode.
+
+- Reads CLIENT_ID / CLIENT_SECRET from the script.
+- Reads refresh_token.txt created by get_refresh_token.py
+- Writes access_token.txt (used by dashboard.py in local or secure mode).
+"""
+
 import base64
 import requests
 
@@ -12,12 +20,12 @@ auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
 
 headers = {
     "Authorization": f"Basic {auth}",
-    "Content-Type": "application/x-www-form-urlencoded"
+    "Content-Type": "application/x-www-form-urlencoded",
 }
 
 data = {
     "grant_type": "refresh_token",
-    "refresh_token": REFRESH_TOKEN
+    "refresh_token": REFRESH_TOKEN,
 }
 
 resp = requests.post("https://accounts.spotify.com/api/token", headers=headers, data=data)
