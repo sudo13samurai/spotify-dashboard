@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const SERVER_BASE = import.meta.env.VITE_SERVER_BASE || "http://127.0.0.1:8888";
+const SERVER_BASE = import.meta.env.VITE_SERVER_BASE || "http://tildeath.site:8888";
 const PIN_KEY = "spotify_dashboard_pins_v1";
 
 async function jget(path) {
