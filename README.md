@@ -116,3 +116,4 @@ playlist-read-private
 playlist-read-collaborative
 
 If you change scopes later, logout and re-auth.
+# spotify-dashboard
