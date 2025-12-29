@@ -180,7 +180,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.get("/auth/login", (req, res) => res.redirect(buildAuthUrl()));
 
-app.get("/callback", async (req, res) => {
+return res.redirect(FRONTEND_ORIGIN);
   const code = req.query.code;
   const error = req.query.error;
 
