@@ -341,7 +341,7 @@ app.put("/api/player/transfer", async (req, res) => {
   res.status(out.status).json(out.json ?? { ok: out.status === 204 });
 });
 
-const PORT = process.env.PORT || 8888;
+#const PORT = process.env.PORT || 8888;
 
 const PORT = Number(process.env.PORT || SERVER_PORT || 8888);
 const HOST = "0.0.0.0";
