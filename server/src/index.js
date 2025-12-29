@@ -341,8 +341,8 @@ app.put("/api/player/transfer", async (req, res) => {
   res.status(out.status).json(out.json ?? { ok: out.status === 204 });
 });
 
-app.listen(Number(SERVER_PORT), SERVER_HOST, () => {
-  console.log(`Server listening on http://${SERVER_HOST}:${SERVER_PORT}`);
-  console.log(`Redirect URI: ${SPOTIFY_REDIRECT_URI}`);
-  console.log(`Client origin allowed: ${FRONTEND_ORIGIN}`);
+const PORT = process.env.PORT || 8888;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server listening on ${PORT}`);
 });
