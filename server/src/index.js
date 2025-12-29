@@ -180,9 +180,19 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.get("/auth/login", (req, res) => res.redirect(buildAuthUrl()));
 
-app.get("/callback", async (req, res) => {
-  const code = req.query.code;
-  const error = req.query.error;
+#app.get("/callback", async (req, res) => {
+#  const code = req.query.code;
+#  const error = req.query.error;
+
+const PORT = Number(process.env.PORT || SERVER_PORT || 8888);
+const HOST = "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server listening on http://${HOST}:${PORT}`);
+  console.log(`Redirect URI: ${SPOTIFY_REDIRECT_URI}`);
+  console.log(`Client origin allowed: ${FRONTEND_ORIGIN}`);
+});
+
 
   if (error) return res.status(400).send(`Spotify auth error: ${error}`);
   if (!code) return res.status(400).send("Missing code");
@@ -341,13 +351,8 @@ app.put("/api/player/transfer", async (req, res) => {
   res.status(out.status).json(out.json ?? { ok: out.status === 204 });
 });
 
-#const PORT = process.env.PORT || 8888;
-
-const PORT = Number(process.env.PORT || SERVER_PORT || 8888);
-const HOST = "0.0.0.0";
-
-app.listen(PORT, HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
+app.listen(Number(SERVER_PORT), SERVER_HOST, () => {
+  console.log(`Server listening on http://${SERVER_HOST}:${SERVER_PORT}`);
   console.log(`Redirect URI: ${SPOTIFY_REDIRECT_URI}`);
   console.log(`Client origin allowed: ${FRONTEND_ORIGIN}`);
 });
