@@ -343,6 +343,11 @@ app.put("/api/player/transfer", async (req, res) => {
 
 const PORT = process.env.PORT || 8888;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on ${PORT}`);
+const PORT = Number(process.env.PORT || SERVER_PORT || 8888);
+const HOST = "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server listening on http://${HOST}:${PORT}`);
+  console.log(`Redirect URI: ${SPOTIFY_REDIRECT_URI}`);
+  console.log(`Client origin allowed: ${FRONTEND_ORIGIN}`);
 });
