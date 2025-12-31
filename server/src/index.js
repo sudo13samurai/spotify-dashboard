@@ -180,19 +180,9 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.get("/auth/login", (req, res) => res.redirect(buildAuthUrl()));
 
-#app.get("/callback", async (req, res) => {
-#  const code = req.query.code;
-#  const error = req.query.error;
-
-const PORT = Number(process.env.PORT || SERVER_PORT || 8888);
-const HOST = "0.0.0.0";
-
-app.listen(PORT, HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
-  console.log(`Redirect URI: ${SPOTIFY_REDIRECT_URI}`);
-  console.log(`Client origin allowed: ${FRONTEND_ORIGIN}`);
-});
-
+app.get("/callback", async (req, res) => {
+  const code = req.query.code;
+  const error = req.query.error;
 
   if (error) return res.status(400).send(`Spotify auth error: ${error}`);
   if (!code) return res.status(400).send("Missing code");
@@ -207,8 +197,9 @@ app.listen(PORT, HOST, () => {
       expires_at: Date.now() + exchanged.expires_in * 1000
     });
 
-    res.redirect(`${FRONTEND_ORIGIN}/`);
-  } catch (e) {
+#    res.redirect(`${FRONTEND_ORIGIN}/`);
+return res.redirect(FRONTEND_ORIGIN); 
+ } catch (e) {
     res.status(500).send(`Token exchange failed: ${String(e)}`);
   }
 });
