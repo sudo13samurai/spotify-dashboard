@@ -16,7 +16,7 @@ const {
   SPOTIFY_REDIRECT_URI,
   SERVER_HOST = "127.0.0.1",
   SERVER_PORT = "8888",
-  FRONTEND_ORIGIN = "http://127.0.0.1:5173",
+  FRONTEND_ORIGIN = "http://tildeath.site:5173",
   TOKENS_PATH = ".tokens.json"
 } = process.env;
 
