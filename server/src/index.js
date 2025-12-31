@@ -197,10 +197,9 @@ app.get("/callback", async (req, res) => {
       expires_at: Date.now() + exchanged.expires_in * 1000
     });
 
-#    res.redirect(`${FRONTEND_ORIGIN}/`);
-return res.redirect(FRONTEND_ORIGIN); 
- } catch (e) {
-    res.status(500).send(`Token exchange failed: ${String(e)}`);
+    return res.redirect(`${FRONTEND_ORIGIN}/`);
+  } catch (e) {
+    return res.status(500).send(`Token exchange failed: ${String(e)}`);
   }
 });
 
