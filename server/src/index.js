@@ -114,9 +114,18 @@ async function spotifyTokenExchange(code) {
 
 /* ---------------- routes ---------------- */
 
+app.get("/", (req, res) => {
+  return res.redirect(process.env.FRONTEND_ORIGIN || "https://tildeath.site");
+});
+	
 app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
+
+app.get("/", (req, res) => {
+  return res.redirect(process.env.FRONTEND_ORIGIN || "https://tildeath.site");
+});
+
 
 app.get("/auth/login", (req, res) => {
   return res.redirect(buildAuthUrl());
@@ -128,6 +137,35 @@ app.get("/callback/auth/login", (req, res) => {
 
 app.get("/callback", async (req, res) => {
   const { code, error } = req.query;
+
+  // Always log what came back from Spotify (safe, no secrets)
+  console.log("🔁 /callback hit:", {
+    hasCode: !!code,
+    error: error || null,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+    frontendOrigin: process.env.FRONTEND_ORIGIN
+  });
+
+  if (error) return res.status(400).send(`Spotify auth error: ${error}`);
+  if (!code) return res.status(400).send("Missing Spotify authorization code");
+
+  try {
+    const exchanged = await spotifyTokenExchange(code);
+
+    writeTokens({
+      access_token: exchanged.access_token,
+      refresh_token: exchanged.refresh_token,
+      expires_in: exchanged.expires_in,
+      expires_at: Date.now() + exchanged.expires_in * 1000
+    });
+
+    const frontend = process.env.FRONTEND_ORIGIN || "https://tildeath.site";
+    return res.redirect(frontend);
+  } catch (err) {
+    console.error("❌ Spotify token exchange failed:", err);
+    return res.status(500).send("Spotify authentication failed");
+  }
+});
 
   if (error) return res.status(400).send(`Spotify auth error: ${error}`);
   if (!code) return res.status(400).send("Missing Spotify authorization code");
