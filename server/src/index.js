@@ -8,6 +8,8 @@ import crypto from "crypto";
 
 dotenv.config();
 
+const PORT = process.env.PORT || 8888;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -16,7 +18,7 @@ const {
   SPOTIFY_CLIENT_SECRET,
   SPOTIFY_REDIRECT_URI,
   SERVER_HOST = "https://spotify-dashboard-xw5t.onrender.com",
-  SERVER_PORT = "51173",
+  SERVER_PORT = "5173",
   FRONTEND_ORIGIN = "http://tildeath.site:5173",
   TOKENS_PATH = ".tokens.json"
 } = process.env;
@@ -159,6 +161,6 @@ app.post("/auth/logout", (req, res) => {
 
 /* ---------------- start server ---------------- */
 
-app.listen(PORT, "5173", () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server listening on port ${PORT}`);
 });
