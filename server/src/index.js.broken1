@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import fetch from "node-fetch";
 import crypto from "crypto";
 
 dotenv.config();
@@ -118,6 +119,12 @@ app.get("/auth/login", (req, res) => {
   return res.redirect(buildAuthUrl());
 });
 
+/**
+ * SAFETY NET:
+ * If the frontend accidentally tries "auth/login" while already on /callback,
+ * the browser will request /callback/auth/login.
+ * We catch that and redirect cleanly.
+ */
 app.get("/callback/auth/login", (req, res) => {
   return res.redirect("/auth/login");
 });
@@ -125,8 +132,13 @@ app.get("/callback/auth/login", (req, res) => {
 app.get("/callback", async (req, res) => {
   const { code, error } = req.query;
 
-  if (error) return res.status(400).send(`Spotify auth error: ${error}`);
-  if (!code) return res.status(400).send("Missing Spotify authorization code");
+  if (error) {
+    return res.status(400).send(`Spotify auth error: ${error}`);
+  }
+
+  if (!code) {
+    return res.status(400).send("Missing Spotify authorization code");
+  }
 
   try {
     const exchanged = await spotifyTokenExchange(code);
