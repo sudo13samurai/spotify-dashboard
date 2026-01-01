@@ -16,7 +16,7 @@ const {
   SPOTIFY_CLIENT_SECRET,
   SPOTIFY_REDIRECT_URI,
   SERVER_HOST = "https://spotify-dashboard-xw5t.onrender.com",
-  SERVER_PORT = "8888",
+  SERVER_PORT = "51173",
   FRONTEND_ORIGIN = "http://tildeath.site:5173",
   TOKENS_PATH = ".tokens.json"
 } = process.env;
