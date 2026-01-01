@@ -159,6 +159,6 @@ app.post("/auth/logout", (req, res) => {
 
 /* ---------------- start server ---------------- */
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "5173", () => {
   console.log(`🚀 Server listening on port ${PORT}`);
 });
