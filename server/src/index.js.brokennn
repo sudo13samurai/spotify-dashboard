@@ -8,23 +8,23 @@ import crypto from "crypto";
 
 dotenv.config();
 
+const PORT = process.env.PORT || 8888;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = process.env.PORT || 8888;
+const {
+  SPOTIFY_CLIENT_ID,
+  SPOTIFY_CLIENT_SECRET,
+  SPOTIFY_REDIRECT_URI,
+  SERVER_HOST = "https://spotify-dashboard-xw5t.onrender.com",
+  SERVER_PORT = "5173",
+  FRONTEND_ORIGIN = "http://tildeath.site:5173",
+  TOKENS_PATH = ".tokens.json"
+} = process.env;
 
-// ✅ Your correct domains (with safe fallbacks)
-const FRONTEND_ORIGIN = (process.env.FRONTEND_ORIGIN || "https://tildeath.site").replace(/\/$/, "");
-const SPOTIFY_REDIRECT_URI = (process.env.SPOTIFY_REDIRECT_URI ||
-  "https://spotify-dashboard-xw5t.onrender.com/callback").replace(/\/$/, "");
-
-const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } = process.env;
-
-// Token file path (NOTE: Render filesystem can be ephemeral across deploys/instances)
-const TOKENS_FILE = process.env.TOKENS_PATH || path.join(__dirname, "tokens.json");
-
-if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
-  console.error("❌ Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET");
+if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_REDIRECT_URI) {
+  console.error("❌ Missing Spotify environment variables");
   process.exit(1);
 }
 
@@ -34,15 +34,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: (origin, cb) => {
-      // allow server-to-server/curl requests with no Origin header
-      if (!origin) return cb(null, true);
-
-      // allow only your frontend
-      if (origin === FRONTEND_ORIGIN) return cb(null, true);
-
-      return cb(new Error(`CORS blocked for origin: ${origin}`));
-    },
+    origin: FRONTEND_ORIGIN,
     credentials: true
   })
 );
@@ -51,21 +43,23 @@ app.use(express.json());
 
 /* ---------------- token storage ---------------- */
 
+const TOKEN_PATH = path.join(__dirname, "tokens.json");
+
 function readTokens() {
-  if (!fs.existsSync(TOKENS_FILE)) return null;
+  if (!fs.existsSync(TOKEN_PATH)) return null;
   try {
-    return JSON.parse(fs.readFileSync(TOKENS_FILE, "utf8"));
+    return JSON.parse(fs.readFileSync(TOKEN_PATH, "utf8"));
   } catch {
     return null;
   }
 }
 
 function writeTokens(tokens) {
-  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
+  fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
 }
 
 function clearTokens() {
-  if (fs.existsSync(TOKENS_FILE)) fs.unlinkSync(TOKENS_FILE);
+  if (fs.existsSync(TOKEN_PATH)) fs.unlinkSync(TOKEN_PATH);
 }
 
 /* ---------------- spotify helpers ---------------- */
@@ -84,7 +78,7 @@ function buildAuthUrl() {
     client_id: SPOTIFY_CLIENT_ID,
     scope,
     redirect_uri: SPOTIFY_REDIRECT_URI,
-    state: crypto.randomBytes(12).toString("hex")
+    state: crypto.randomBytes(8).toString("hex")
   });
 
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
@@ -97,13 +91,14 @@ async function spotifyTokenExchange(code) {
     redirect_uri: SPOTIFY_REDIRECT_URI
   });
 
-  // Node 22 has native fetch
   const res = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
       Authorization:
         "Basic " +
-        Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
+        Buffer.from(
+          `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
+        ).toString("base64"),
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body
@@ -119,26 +114,36 @@ async function spotifyTokenExchange(code) {
 
 /* ---------------- routes ---------------- */
 
-// Always bounce backend root to your real site (prevents "Cannot GET /")
-app.get("/", (req, res) => res.redirect(FRONTEND_ORIGIN));
+app.get("/", (req, res) => {
+  return res.redirect(process.env.FRONTEND_ORIGIN || "https://tildeath.site");
+});
+	
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/", (req, res) => {
+  return res.redirect(process.env.FRONTEND_ORIGIN || "https://tildeath.site");
+});
 
-// Start Spotify login
-app.get("/auth/login", (req, res) => res.redirect(buildAuthUrl()));
 
-// Safety net: fixes accidental relative navigation creating /callback/auth/login
-app.get("/callback/auth/login", (req, res) => res.redirect("/auth/login"));
+app.get("/auth/login", (req, res) => {
+  return res.redirect(buildAuthUrl());
+});
 
-// Spotify redirects here after user authorizes
+app.get("/callback/auth/login", (req, res) => {
+  return res.redirect("/auth/login");
+});
+
 app.get("/callback", async (req, res) => {
   const { code, error } = req.query;
 
+  // Always log what came back from Spotify (safe, no secrets)
   console.log("🔁 /callback hit:", {
     hasCode: !!code,
     error: error || null,
-    redirectUri: SPOTIFY_REDIRECT_URI,
-    frontendOrigin: FRONTEND_ORIGIN
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+    frontendOrigin: process.env.FRONTEND_ORIGIN
   });
 
   if (error) return res.status(400).send(`Spotify auth error: ${error}`);
@@ -154,7 +159,28 @@ app.get("/callback", async (req, res) => {
       expires_at: Date.now() + exchanged.expires_in * 1000
     });
 
-    return res.redirect(FRONTEND_ORIGIN);
+    const frontend = process.env.FRONTEND_ORIGIN || "https://tildeath.site";
+    return res.redirect(frontend);
+  } catch (err) {
+    console.error("❌ Spotify token exchange failed:", err);
+    return res.status(500).send("Spotify authentication failed");
+  }
+});
+
+  if (error) return res.status(400).send(`Spotify auth error: ${error}`);
+  if (!code) return res.status(400).send("Missing Spotify authorization code");
+
+  try {
+    const exchanged = await spotifyTokenExchange(code);
+
+    writeTokens({
+      access_token: exchanged.access_token,
+      refresh_token: exchanged.refresh_token,
+      expires_in: exchanged.expires_in,
+      expires_at: Date.now() + exchanged.expires_in * 1000
+    });
+
+    return res.redirect(`${FRONTEND_ORIGIN}/`);
   } catch (err) {
     console.error("❌ Spotify token exchange failed:", err);
     return res.status(500).send("Spotify authentication failed");
@@ -175,6 +201,4 @@ app.post("/auth/logout", (req, res) => {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server listening on port ${PORT}`);
-  console.log(`🌐 FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}`);
-  console.log(`↩️  SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI}`);
 });
