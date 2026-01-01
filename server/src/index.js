@@ -1,4 +1,4 @@
-import express from "express";
+wimport express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -179,6 +179,8 @@ async function spotifyRequest(method, endpoint, bodyObj = null) {
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.get("/auth/login", (req, res) => res.redirect(buildAuthUrl()));
+
+app.get("/callback", (req, res) => {
 
 return res.redirect(`${FRONTEND_ORIGIN}/`);
   const code = req.query.code;
