@@ -183,6 +183,108 @@ app.post("/auth/logout", (req, res) => {
 app.get("/callback/auth/login", (req, res) => res.redirect("/auth/login"));
 app.get("/callback/auth/status", (req, res) => res.redirect("/auth/status"));
 
+async function getValidAccessToken() {
+  const tokens = readTokens();
+  if (!tokens?.refresh_token) return null;
+
+  if (tokens.expires_at && Date.now() < tokens.expires_at - 5000) {
+    return tokens.access_token;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: tokens.refresh_token
+  });
+
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      Authorization:
+        "Basic " + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(json));
+
+  writeTokens({
+    ...tokens,
+    access_token: json.access_token,
+    expires_in: json.expires_in,
+    expires_at: Date.now() + json.expires_in * 1000
+  });
+
+  return json.access_token;
+}
+
+async function spotifyApi(req, res, endpoint) {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const url = `https://api.spotify.com/v1${endpoint}`;
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text);
+
+    res.type("json").send(text);
+  } catch (err) {
+    console.error("Spotify API error:", err);
+    res.status(500).json({ error: "Spotify API error" });
+  }
+}
+
+// ---- API ROUTES ----
+
+app.get("/api/player/state", (req, res) => spotifyApi(req, res, "/me/player"));
+app.get("/api/player/devices", (req, res) => spotifyApi(req, res, "/me/player/devices"));
+app.get("/api/top-tracks", (req, res) => spotifyApi(req, res, "/me/top/tracks" + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : "")));
+app.get("/api/top-artists", (req, res) => spotifyApi(req, res, "/me/top/artists" + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : "")));
+app.get("/api/recently-played", (req, res) => spotifyApi(req, res, "/me/player/recently-played" + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : "")));
+app.get("/api/playlists", (req, res) => spotifyApi(req, res, "/me/playlists" + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : "")));
+
+app.get("/api/playlists/:id/tracks", (req, res) =>
+  spotifyApi(req, res, `/playlists/${req.params.id}/tracks` + (req.url.split("?")[1] ? "?" + req.url.split("?")[1] : ""))
+);
+
+// player controls
+app.put("/api/player/play", (req, res) => spotifyApi(req, res, "/me/player/play"));
+app.put("/api/player/pause", (req, res) => spotifyApi(req, res, "/me/player/pause"));
+app.post("/api/player/next", (req, res) => spotifyApi(req, res, "/me/player/next"));
+app.post("/api/player/previous", (req, res) => spotifyApi(req, res, "/me/player/previous"));
+app.put("/api/player/shuffle", (req, res) => spotifyApi(req, res, `/me/player/shuffle?${req.url.split("?")[1] || ""}`));
+app.put("/api/player/repeat", (req, res) => spotifyApi(req, res, `/me/player/repeat?${req.url.split("?")[1] || ""}`));
+app.put("/api/player/volume", (req, res) => spotifyApi(req, res, `/me/player/volume?${req.url.split("?")[1] || ""}`));
+app.put("/api/player/seek", (req, res) => spotifyApi(req, res, `/me/player/seek?${req.url.split("?")[1] || ""}`));
+app.put("/api/player/transfer", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    const r = await fetch("https://api.spotify.com/v1/me/player", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+    const text = await r.text();
+    res.status(r.status).send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Transfer failed" });
+  }
+});
+
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server listening on port ${PORT}`);
   console.log(`🌐 FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}`);
