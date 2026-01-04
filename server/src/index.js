@@ -110,6 +110,18 @@ async function spotifyTokenExchange(code) {
   return res.json();
 }
 
+// If anything tries to call /callback/api/... or /callback/auth/...
+// redirect it to the correct /api/... or /auth/... route.
+app.get("/callback/api/*", (req, res) => {
+  const fixed = req.originalUrl.replace(/^\/callback/, "");
+  return res.redirect(307, fixed); // keep method if ever used for POST/PUT later
+});
+
+app.get("/callback/auth/*", (req, res) => {
+  const fixed = req.originalUrl.replace(/^\/callback/, "");
+  return res.redirect(307, fixed);
+});
+
 // routes
 app.get("/", (req, res) => res.redirect(FRONTEND_ORIGIN));
 app.get("/health", (req, res) => res.json({ ok: true }));
