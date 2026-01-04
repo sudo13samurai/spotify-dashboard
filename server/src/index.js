@@ -6,6 +6,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 
+const usedCodes = new Set();
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,7 +90,26 @@ function buildAuthUrl() {
   });
 
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
+
+const code = req.query.code;
+
+console.log("Callback URL:", req.originalUrl);
+console.log("Referer:", req.get("referer"));
+console.log("Has code:", !!code, "Code length:", code ? code.length : 0);
+
+if (!code) {
+  return res.status(400).send("Missing code");
 }
+
+if (usedCodes.has(code)) {
+  console.warn("Duplicate callback with same code; skipping token exchange.");
+  return res.redirect(process.env.FRONTEND_ORIGIN);
+}
+
+usedCodes.add(code);
+setTimeout(() => usedCodes.delete(code), 5 * 60 * 1000);
+}
+
 
 async function spotifyTokenExchange(code) {
   const body = new URLSearchParams({
