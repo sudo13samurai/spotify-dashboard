@@ -8,15 +8,19 @@ const SERVER_BASE =
 
 const PIN_KEY = "spotify_dashboard_pins_v1";
 
+function normPath(p) {
+  return p.startsWith("/") ? p : `/${p}`;
+}
+
 async function jget(path) {
-  const res = await fetch(`${SERVER_BASE}${path}`, { credentials: "include" });
-  if (res.status === 204) return { status: 204, json: null };
+const res = await fetch(`${SERVER_BASE}${normPath(path)}`, { credentials: "include" });
+	  if (res.status === 204) return { status: 204, json: null };
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
 
 async function jmut(method, path, body = null) {
-  const res = await fetch(`${SERVER_BASE}${path}`, {
+ const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
     method,
     credentials: "include",
     headers: body ? { "Content-Type": "application/json" } : undefined,

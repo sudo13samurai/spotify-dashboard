@@ -168,6 +168,9 @@ app.post("/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/callback/auth/login", (req, res) => res.redirect("/auth/login"));
+app.get("/callback/auth/status", (req, res) => res.redirect("/auth/status"));
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server listening on port ${PORT}`);
   console.log(`🌐 FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}`);
