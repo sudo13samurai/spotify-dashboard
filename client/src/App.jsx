@@ -341,7 +341,7 @@ export default function App() {
 
         <div className="actions">
           {!authed ? (
-            <a className="btn primary" href={loginUrl}>Connect Spotify</a>
+            <a className="btn primary" href={`${SERVER_BASE}/auth/login`}>Connect Spotify</a>
           ) : (
             <>
               <button className="btn ghost" onClick={loadAll} disabled={loading}>Refresh</button>
