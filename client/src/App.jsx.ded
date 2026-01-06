@@ -13,14 +13,14 @@ function normPath(p) {
 }
 
 async function jget(path) {
-  const res = await fetch(`${SERVER_BASE}${normPath(path)}`, { credentials: "include" });
-  if (res.status === 204) return { status: 204, json: null };
+const res = await fetch(`${SERVER_BASE}${normPath(path)}`, { credentials: "include" });
+	  if (res.status === 204) return { status: 204, json: null };
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
 
 async function jmut(method, path, body = null) {
-  const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
+ const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
     method,
     credentials: "include",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -101,8 +101,8 @@ export default function App() {
   }, [pins]);
 
   // ✅ make these react to SERVER_BASE
-  const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
-  const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
+  const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, []);
+  const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, []);
 
   const isPlaying = Boolean(player?.is_playing);
   const shuffleOn = Boolean(player?.shuffle_state);
@@ -125,13 +125,7 @@ export default function App() {
 
   async function refreshStatus() {
     const out = await jget("/auth/status");
-    const ok = Boolean(out.json?.authed);
-    setAuthed(ok);
-
-    // Helpful UI message if backend is returning 403 due to missing cookies/session
-    if (!ok && out.status === 403) {
-      setMsg("Session not authorized yet. Try reconnecting Spotify.");
-    }
+    setAuthed(Boolean(out.json?.authed));
   }
 
   async function loadLibraryAndPlaylists() {
@@ -141,16 +135,6 @@ export default function App() {
       jget("/api/recently-played?limit=10"),
       jget("/api/playlists?limit=50&offset=0")
     ]);
-
-    // If any come back 401/403, show the reason (handy for cross-site cookie issues)
-    const firstErr = [ta, tt, rp, pls].find((x) => x.status >= 400);
-    if (firstErr) {
-      const errMsg =
-        firstErr?.json?.error ||
-        (typeof firstErr?.json === "string" ? firstErr.json : "") ||
-        (firstErr.status === 403 ? "Forbidden (session/cookie not being sent)" : `Request failed (${firstErr.status})`);
-      setMsg(String(errMsg));
-    }
 
     setTopArtists(Array.isArray(ta.json?.items) ? ta.json.items : []);
     setTopTracks(Array.isArray(tt.json?.items) ? tt.json.items : []);
@@ -307,7 +291,9 @@ export default function App() {
     setTimeout(syncPlayer, 700);
   }
 
-  const pinnedPlaylists = pins.map((id) => playlists.find((p) => p.id === id)).filter(Boolean);
+  const pinnedPlaylists = pins
+    .map((id) => playlists.find((p) => p.id === id))
+    .filter(Boolean);
 
   const suggestedPins = playlists
     .filter((p) => !pins.includes(p.id))
@@ -359,17 +345,11 @@ export default function App() {
 
         <div className="actions">
           {!authed ? (
-            <a className="btn primary" href={`${SERVER_BASE}/auth/login`}>
-              Connect Spotify
-            </a>
+            <a className="btn primary" href={`${SERVER_BASE}/auth/login`}>Connect Spotify</a>
           ) : (
             <>
-              <button className="btn ghost" onClick={loadAll} disabled={loading}>
-                Refresh
-              </button>
-              <button className="btn danger" onClick={logout}>
-                Logout
-              </button>
+              <button className="btn ghost" onClick={loadAll} disabled={loading}>Refresh</button>
+              <button className="btn danger" onClick={logout}>Logout</button>
             </>
           )}
         </div>
@@ -384,9 +364,7 @@ export default function App() {
       {!authed ? (
         <div className="card" style={{ minHeight: "unset" }}>
           <h2>Not connected</h2>
-          <p>
-            Click <b>Connect Spotify</b> to authorize.
-          </p>
+          <p>Click <b>Connect Spotify</b> to authorize.</p>
           <p className="muted">
             Redirect URI must match exactly:
             <br />
