@@ -1,0 +1,177 @@
+/* Links: white, slightly darker on hover */
+a.link {
+  color: #fff;
+  text-decoration: none;
+}
+a.link:hover {
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: underline;
+}
+
+/* For clickable non-<a> text (playlist names etc.) */
+.linkLike {
+  color: #fff;
+  cursor: pointer;
+}
+.linkLike:hover {
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: underline;
+}
+
+/* List + rows with cover art */
+.list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.row:last-child {
+  border-bottom: none;
+}
+.rowMeta {
+  flex: 1;
+  min-width: 0;
+}
+.rowTitle {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clickable {
+  cursor: pointer;
+}
+.activeRow {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.thumb.fallback {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Top strip (profile + now playing combined) */
+.topStrip {
+  margin-bottom: 14px;
+}
+.topStripRow {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.topStripLeft {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 260px;
+}
+.topStripMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topStripName {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.topStripNow {
+  flex: 1;
+  min-width: 360px;
+}
+.nowRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.nowMeta {
+  flex: 1;
+  min-width: 0;
+}
+.nowTitle {
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Device row inside top strip */
+.deviceRow {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Header row in cards */
+.cardHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* More button */
+.moreBtn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+/* Simple bars visualizer */
+.viz {
+  display: inline-flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 18px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.viz span {
+  width: 3px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(29, 185, 84, 0.85); /* Spotify green */
+  opacity: 0.65;
+}
+.viz.on span {
+  opacity: 0.95;
+  animation: vizBounce 0.9s infinite ease-in-out;
+}
+.viz.on span:nth-child(2) { animation-delay: 0.10s; }
+.viz.on span:nth-child(3) { animation-delay: 0.20s; }
+.viz.on span:nth-child(4) { animation-delay: 0.05s; }
+.viz.on span:nth-child(5) { animation-delay: 0.18s; }
+.viz.on span:nth-child(6) { animation-delay: 0.12s; }
+.viz.on span:nth-child(7) { animation-delay: 0.25s; }
+.viz.on span:nth-child(8) { animation-delay: 0.08s; }
+
+@keyframes vizBounce {
+  0%   { transform: scaleY(0.6); }
+  50%  { transform: scaleY(2.2); }
+  100% { transform: scaleY(0.7); }
+}
