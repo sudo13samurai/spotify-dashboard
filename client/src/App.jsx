@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// ✅ IMPORTANT: point the frontend at the REAL backend.
-// Set VITE_SERVER_BASE in your frontend build env to override.
-// Example: VITE_SERVER_BASE=https://spotify-dashboard-xw5t.onrender.com
-const SERVER_BASE =
-  (import.meta.env.VITE_SERVER_BASE || "https://spotify-dashboard-xw5t.onrender.com").replace(/\/$/, "");
+// Backend base (Render service). You can override at build-time:
+// VITE_SERVER_BASE=https://spotify-dashboard-xw5t.onrender.com
+const SERVER_BASE = (import.meta.env.VITE_SERVER_BASE || "https://spotify-dashboard-xw5t.onrender.com").replace(
+  /\/$/,
+  ""
+);
 
 const PIN_KEY = "spotify_dashboard_pins_v1";
 
@@ -16,11 +17,11 @@ async function jget(path) {
   const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
     credentials: "include",
     cache: "no-store",
-    headers: {
-      "Cache-Control": "no-cache"
-    }
+    headers: { "Cache-Control": "no-cache" }
   });
+
   if (res.status === 204) return { status: 204, json: null };
+
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
@@ -36,22 +37,18 @@ async function jmut(method, path, body = null) {
     },
     body: body ? JSON.stringify(body) : undefined
   });
+
   if (res.status === 204) return { status: 204, json: null };
+
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
 
 function msToTime(ms) {
-  const s = Math.max(0, Math.floor(ms / 1000));
+  const s = Math.max(0, Math.floor((ms || 0) / 1000));
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-function nextRepeatState(state) {
-  if (state === "off") return "context";
-  if (state === "context") return "track";
-  return "off";
 }
 
 function safeJsonParse(str, fallback) {
@@ -63,15 +60,14 @@ function safeJsonParse(str, fallback) {
   }
 }
 
-function playlistImageUrl(pl) {
-  const url = pl?.images?.[0]?.url;
+function imgOrNull(url) {
   return typeof url === "string" && url.length ? url : null;
 }
 
-function PillThumb({ playlist }) {
-  const img = playlistImageUrl(playlist);
-  if (img) return <img className="pillImg" src={img} alt="" />;
-  return <span className="pillImgFallback" aria-hidden="true" />;
+function SmallCover({ url }) {
+  const u = imgOrNull(url);
+  if (u) return <img className="cover" src={u} alt="" />;
+  return <div className="cover fallback" aria-hidden="true" />;
 }
 
 export default function App() {
@@ -79,27 +75,24 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // Playback state
-  const [player, setPlayer] = useState(null); // /me/player response
+  // playback
+  const [player, setPlayer] = useState(null);
   const [devices, setDevices] = useState([]);
   const [targetDeviceId, setTargetDeviceId] = useState("");
 
-  // Live progress
   const [progressMs, setProgressMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const seekingRef = useRef(false);
 
-  // Library
+  // library
   const [topArtists, setTopArtists] = useState([]);
   const [topTracks, setTopTracks] = useState([]);
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
 
-  // Playlists
+  // playlists
   const [playlists, setPlaylists] = useState([]);
-  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [playlistTracks, setPlaylistTracks] = useState([]);
 
-  // Quick Play pins
+  // pins
   const [pins, setPins] = useState(() => {
     const raw = localStorage.getItem(PIN_KEY);
     const parsed = raw ? safeJsonParse(raw, []) : [];
@@ -110,63 +103,23 @@ export default function App() {
     localStorage.setItem(PIN_KEY, JSON.stringify(pins));
   }, [pins]);
 
-  // ✅ make these react to SERVER_BASE
-  const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
-  const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
-
+  const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, []);
+  const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, []);
 
   const isPlaying = Boolean(player?.is_playing);
-  const shuffleOn = Boolean(player?.shuffle_state);
-  const repeatState = player?.repeat_state ?? "off";
-  const activeDevice = player?.device ?? null;
-
-  // Context label
-  const contextType = player?.context?.type ?? "";
-  const contextUri = player?.context?.uri ?? "";
-  const contextNameGuess = (() => {
-    if (!contextUri) return "None";
-    if (contextType === "playlist") {
-      const pl = playlists.find((p) => p.uri === contextUri);
-      return pl ? pl.name : "Playlist";
-    }
-    if (contextType === "album") return "Album";
-    if (contextType === "artist") return "Artist";
-    return contextType ? contextType : "Context";
-  })();
+  const nowItem = player?.item ?? null;
+  const nowTitle = nowItem?.name ?? "";
+  const nowArtists = nowItem?.artists?.map((a) => a.name).join(", ") ?? "";
+  const nowAlbum = nowItem?.album?.name ?? "";
+  const nowCover = nowItem?.album?.images?.[0]?.url ?? null;
 
   async function refreshStatus() {
     const out = await jget("/auth/status");
     const ok = Boolean(out.json?.authed);
     setAuthed(ok);
-
-    // Helpful UI message if backend is returning 403 due to missing cookies/session
-    if (!ok && out.status === 403) {
-      setMsg("Session not authorized yet. Try reconnecting Spotify.");
+    if (!ok && out.status >= 400) {
+      setMsg(out.json?.error ? String(out.json.error) : "Not authenticated. Click Connect Spotify.");
     }
-  }
-
-  async function loadLibraryAndPlaylists() {
-    const [ta, tt, rp, pls] = await Promise.all([
-      jget("/api/top-artists?time_range=short_term&limit=10"),
-      jget("/api/top-tracks?time_range=short_term&limit=10"),
-      jget("/api/recently-played?limit=10"),
-      jget("/api/playlists?limit=50&offset=0")
-    ]);
-
-    // If any come back 401/403, show the reason (handy for cross-site cookie issues)
-    const firstErr = [ta, tt, rp, pls].find((x) => x.status >= 400);
-    if (firstErr) {
-      const errMsg =
-        firstErr?.json?.error ||
-        (typeof firstErr?.json === "string" ? firstErr.json : "") ||
-        (firstErr.status === 403 ? "Forbidden (session/cookie not being sent)" : `Request failed (${firstErr.status})`);
-      setMsg(String(errMsg));
-    }
-
-    setTopArtists(Array.isArray(ta.json?.items) ? ta.json.items : []);
-    setTopTracks(Array.isArray(tt.json?.items) ? tt.json.items : []);
-    setRecentlyPlayed(Array.isArray(rp.json?.items) ? rp.json.items : []);
-    setPlaylists(Array.isArray(pls.json?.items) ? pls.json.items : []);
   }
 
   async function syncPlayer() {
@@ -193,11 +146,31 @@ export default function App() {
     if (activeId && !targetDeviceId) setTargetDeviceId(activeId);
   }
 
+  async function loadLibrary() {
+    const [ta, tt, rp, pls] = await Promise.all([
+      jget("/api/top-artists?time_range=short_term&limit=10"),
+      jget("/api/top-tracks?time_range=short_term&limit=10"),
+      jget("/api/recently-played?limit=10"),
+      jget("/api/playlists?limit=50&offset=0")
+    ]);
+
+    // show any API error text in the UI
+    const firstBad = [ta, tt, rp, pls].find((x) => x.status >= 400);
+    if (firstBad) {
+      setMsg(firstBad.json?.error ? String(firstBad.json.error) : `Request failed (${firstBad.status})`);
+    }
+
+    setTopArtists(Array.isArray(ta.json?.items) ? ta.json.items : []);
+    setTopTracks(Array.isArray(tt.json?.items) ? tt.json.items : []);
+    setRecentlyPlayed(Array.isArray(rp.json?.items) ? rp.json.items : []);
+    setPlaylists(Array.isArray(pls.json?.items) ? pls.json.items : []);
+  }
+
   async function loadAll() {
     setLoading(true);
     setMsg("");
     try {
-      await Promise.all([syncPlayer(), loadLibraryAndPlaylists()]);
+      await Promise.all([syncPlayer(), loadLibrary()]);
     } finally {
       setLoading(false);
     }
@@ -205,68 +178,24 @@ export default function App() {
 
   async function logout() {
     await fetch(logoutUrl, { method: "POST", credentials: "include" });
-    await refreshStatus();
-
+    setAuthed(false);
     setPlayer(null);
     setDevices([]);
     setTargetDeviceId("");
     setProgressMs(0);
     setDurationMs(0);
-
     setTopArtists([]);
     setTopTracks([]);
     setRecentlyPlayed([]);
-
     setPlaylists([]);
-    setSelectedPlaylist(null);
-    setPlaylistTracks([]);
-
     setMsg("");
   }
 
-  // --- playback actions ---
   async function playPause() {
     setMsg("");
-    const hint = "If controls fail: open Spotify on phone/desktop and start playback once (active device required).";
     const out = isPlaying ? await jmut("PUT", "/api/player/pause") : await jmut("PUT", "/api/player/play");
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : hint);
+    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Play/Pause failed.");
     setTimeout(syncPlayer, 600);
-  }
-
-  async function nextTrack() {
-    setMsg("");
-    const out = await jmut("POST", "/api/player/next");
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Next failed.");
-    setTimeout(syncPlayer, 700);
-  }
-
-  async function prevTrack() {
-    setMsg("");
-    const out = await jmut("POST", "/api/player/previous");
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Previous failed.");
-    setTimeout(syncPlayer, 700);
-  }
-
-  async function setVolumePct(v) {
-    setMsg("");
-    const out = await jmut("PUT", `/api/player/volume?volume=${v}`);
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Volume failed.");
-  }
-
-  async function toggleShuffle() {
-    setMsg("");
-    const next = !shuffleOn;
-    const out = await jmut("PUT", `/api/player/shuffle?state=${next}`);
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Shuffle failed.");
-    setTimeout(syncPlayer, 500);
-  }
-
-  async function cycleRepeat() {
-    setMsg("");
-    const next = nextRepeatState(repeatState);
-    const out = await jmut("PUT", `/api/player/repeat?state=${next}`);
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Repeat failed.");
-    setTimeout(syncPlayer, 500);
   }
 
   async function transferDevice() {
@@ -277,54 +206,13 @@ export default function App() {
     setTimeout(syncPlayer, 800);
   }
 
-  async function commitSeek(newMs) {
-    setMsg("");
-    const out = await jmut("PUT", `/api/player/seek?position_ms=${newMs}`);
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Seek failed.");
-    setTimeout(syncPlayer, 450);
-  }
-
-  // --- playlists ---
-  async function openPlaylist(pl) {
-    setSelectedPlaylist(pl);
-    setPlaylistTracks([]);
-    const out = await jget(`/api/playlists/${pl.id}/tracks?limit=50&offset=0`);
-    setPlaylistTracks(Array.isArray(out.json?.items) ? out.json.items : []);
-  }
-
-  async function playPlaylistTrack(index) {
-    if (!selectedPlaylist?.uri) return;
-    setMsg("");
-    const body = { context_uri: selectedPlaylist.uri, offset: { position: index }, position_ms: 0 };
-    const out = await jmut("PUT", "/api/player/play", body);
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Play failed (active device / Premium?).");
-    setTimeout(syncPlayer, 700);
-  }
-
-  // --- quick play ---
-  function isPinned(id) {
-    return pins.includes(id);
-  }
-
   function togglePin(id) {
     setPins((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev].slice(0, 8)));
   }
 
-  async function quickPlayPlaylist(pl) {
-    if (!pl?.uri) return;
-    setMsg("");
-    const out = await jmut("PUT", "/api/player/play", { context_uri: pl.uri, offset: { position: 0 }, position_ms: 0 });
-    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Quick Play failed (active device / Premium?).");
-    setTimeout(syncPlayer, 700);
-  }
-
   const pinnedPlaylists = pins.map((id) => playlists.find((p) => p.id === id)).filter(Boolean);
 
-  const suggestedPins = playlists
-    .filter((p) => !pins.includes(p.id))
-    .slice(0, Math.max(0, 6 - pinnedPlaylists.length));
-
-  // --- initial load ---
+  // initial
   useEffect(() => {
     refreshStatus();
   }, []);
@@ -333,7 +221,7 @@ export default function App() {
     if (authed) loadAll();
   }, [authed]);
 
-  // Live progress tick
+  // live progress tick
   useEffect(() => {
     const id = setInterval(() => {
       if (!player || !player.item) return;
@@ -344,19 +232,12 @@ export default function App() {
     return () => clearInterval(id);
   }, [player, durationMs]);
 
-  // Periodic sync
+  // periodic sync
   useEffect(() => {
     if (!authed) return;
     const id = setInterval(() => syncPlayer(), 5000);
     return () => clearInterval(id);
   }, [authed]);
-
-  const nowItem = player?.item ?? null;
-  const nowArtists = nowItem?.artists?.map((a) => a.name).join(", ") ?? "";
-  const nowAlbum = nowItem?.album?.name ?? "";
-  const nowCover = nowItem?.album?.images?.[0]?.url ?? null;
-
-  const seekPct = durationMs > 0 ? Math.round((progressMs / durationMs) * 1000) / 10 : 0;
 
   return (
     <div className="page">
@@ -370,7 +251,7 @@ export default function App() {
 
         <div className="actions">
           {!authed ? (
-            <a className="btn primary" href={`${SERVER_BASE}/auth/login`}>
+            <a className="btn primary" href={loginUrl}>
               Connect Spotify
             </a>
           ) : (
@@ -406,7 +287,136 @@ export default function App() {
         </div>
       ) : (
         <div className="grid">
-          {/* ... the rest of your component stays exactly the same ... */}
+          <div className="card">
+            <h2>Now Playing</h2>
+            {nowItem ? (
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <SmallCover url={nowCover} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700 }}>{nowTitle}</div>
+                  <div className="muted">{nowArtists}</div>
+                  <div className="muted">{nowAlbum}</div>
+                  <div className="muted">
+                    {msToTime(progressMs)} / {msToTime(durationMs)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn ghost" onClick={playPause}>
+                    {isPlaying ? "Pause" : "Play"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="muted">Nothing playing (open Spotify and start a track).</div>
+            )}
+
+            <div style={{ marginTop: 14 }}>
+              <h3 style={{ marginBottom: 8 }}>Device</h3>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select
+                  value={targetDeviceId}
+                  onChange={(e) => setTargetDeviceId(e.target.value)}
+                  style={{ flex: 1 }}
+                >
+                  <option value="">Select a device…</option>
+                  {devices.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} {d.is_active ? "(active)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn ghost" onClick={transferDevice}>
+                  Transfer
+                </button>
+              </div>
+              <div className="muted" style={{ marginTop: 6 }}>
+                If controls fail, start playback on your phone/desktop once to activate a device.
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Top Tracks</h2>
+            {topTracks.length ? (
+              <ol>
+                {topTracks.map((t) => (
+                  <li key={t.id}>
+                    <span style={{ fontWeight: 600 }}>{t.name}</span>{" "}
+                    <span className="muted">— {t.artists?.map((a) => a.name).join(", ")}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="muted">No tracks loaded yet.</div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Top Artists</h2>
+            {topArtists.length ? (
+              <ol>
+                {topArtists.map((a) => (
+                  <li key={a.id}>
+                    <span style={{ fontWeight: 600 }}>{a.name}</span>{" "}
+                    <span className="muted">({a.genres?.slice(0, 2).join(", ") || "no genres"})</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="muted">No artists loaded yet.</div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Recently Played</h2>
+            {recentlyPlayed.length ? (
+              <ol>
+                {recentlyPlayed.map((it, idx) => {
+                  const tr = it?.track;
+                  if (!tr) return null;
+                  return (
+                    <li key={`${tr.id}-${idx}`}>
+                      <span style={{ fontWeight: 600 }}>{tr.name}</span>{" "}
+                      <span className="muted">— {tr.artists?.map((a) => a.name).join(", ")}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <div className="muted">No recent plays loaded yet.</div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Playlists</h2>
+            {playlists.length ? (
+              <ul style={{ listStyle: "none", paddingLeft: 0 }}>
+                {playlists.slice(0, 20).map((p) => (
+                  <li
+                    key={p.id}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{p.name}</div>
+                      <div className="muted">{p.tracks?.total ?? 0} tracks</div>
+                    </div>
+                    <button className="btn ghost" onClick={() => togglePin(p.id)}>
+                      {pins.includes(p.id) ? "Unpin" : "Pin"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="muted">No playlists loaded yet.</div>
+            )}
+
+            {!!pinnedPlaylists.length && (
+              <>
+                <h3 style={{ marginTop: 14 }}>Pinned</h3>
+                <div className="muted">{pinnedPlaylists.map((p) => p.name).join(" • ")}</div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
