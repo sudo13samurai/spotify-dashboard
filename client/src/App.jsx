@@ -527,8 +527,9 @@ export default function App() {
 
               <div className="topStripNow">
                 <div className="nowRow">
-		<div className=(isPlaying ? "nowPlayingGlow" : ""}>
-		 <CoverThumb url={nowCover} alt="Now playing cover" />
+		<div className={isPlaying ? "nowPlayingGlow" : ""}>
+  <CoverThumb url={nowCover} alt="Now playing cover" />
+</div>
                   <div className="nowMeta">
                     <div className="nowTitle">
                       {nowItem ? <ExternalLink href={nowUrl}>{nowTitle}</ExternalLink> : <span className="muted">Nothing playing</span>}
