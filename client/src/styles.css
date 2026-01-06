@@ -593,3 +593,26 @@ a.link:hover {
 .deviceRow select {
   max-width: 520px;
 }
+
+/* --- Pulse glow for Now Playing cover --- */
+@keyframes pulseGlow {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(29, 185, 84, 0.55),
+      0 0 20px 6px rgba(29, 185, 84, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 10px rgba(29, 185, 84, 0.25),
+      0 0 28px 12px rgba(29, 185, 84, 0.45);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(29, 185, 84, 0.55),
+      0 0 20px 6px rgba(29, 185, 84, 0.25);
+  }
+}
+
+.nowPlayingGlow {
+  animation: pulseGlow 2.8s ease-in-out infinite;
+}
