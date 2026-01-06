@@ -15,7 +15,10 @@ function normPath(p) {
 async function jget(path) {
   const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
     credentials: "include",
-    cache: "no-store"
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-cache"
+    }
   });
   if (res.status === 204) return { status: 204, json: null };
   const json = await res.json().catch(() => null);
@@ -27,7 +30,10 @@ async function jmut(method, path, body = null) {
     method,
     credentials: "include",
     cache: "no-store",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      "Cache-Control": "no-cache"
+    },
     body: body ? JSON.stringify(body) : undefined
   });
   if (res.status === 204) return { status: 204, json: null };
@@ -105,8 +111,11 @@ export default function App() {
   }, [pins]);
 
   // ✅ make these react to SERVER_BASE
+  #const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
+  #const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
   const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
   const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
+
 
   const isPlaying = Boolean(player?.is_playing);
   const shuffleOn = Boolean(player?.shuffle_state);

@@ -237,6 +237,13 @@ app.get("/callback/auth/*", (req, res) => {
   return res.redirect(307, fixed);
 });
 
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
+
 // ----------------- routes -----------------
 
 app.get("/", (req, res) => res.redirect(FRONTEND_ORIGIN));
