@@ -245,7 +245,7 @@ export default function App() {
         <div className="title">
           <h1>Spotify Dashboard</h1>
           <p className="sub">
-            Two-column, Spotify-green cyber glow — powered by <code>{SERVER_BASE}</code>.
+            Two-column, Spotify-green cyber glow — powered by <code>https://tildeath.site</code>.
           </p>
         </div>
 
@@ -422,7 +422,7 @@ export default function App() {
 
       <footer className="footer">
         <span className="muted">
-          API: <code>{SERVER_BASE}</code>
+          API: <code>https://tildeath.site</code>
         </span>
       </footer>
     </div>
