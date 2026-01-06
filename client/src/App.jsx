@@ -509,8 +509,6 @@ export default function App() {
           {/* Top strip: profile + now playing */}
           <div className="card topStrip">
             <div className="topStripRow">
-              <div className="topStripLeft">
-                <CoverThumb url={me?.images?.[0]?.url} alt="Profile" />
                 <div className="topStripMeta">
                   <div className="topStripName">
                     <ExternalLink href={meUrl}>{meName}</ExternalLink>
