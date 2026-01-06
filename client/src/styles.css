@@ -510,3 +510,14 @@ a.link:hover {
   50%  { transform: scaleY(2.2); }
   100% { transform: scaleY(0.7); }
 }
+
+.small {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.footerLine {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}

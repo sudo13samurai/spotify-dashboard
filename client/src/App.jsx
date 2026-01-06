@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// Backend base (Render service). You can override at build-time:
-// VITE_SERVER_BASE=https://spotify-dashboard-xw5t.onrender.com
 const SERVER_BASE = (import.meta.env.VITE_SERVER_BASE || "https://spotify-dashboard-xw5t.onrender.com").replace(
   /\/$/,
   ""
 );
+
+const SITE_NAME = "tildeath.site";
+const SITE_URL = "https://tildeath.site";
 
 const PIN_KEY = "spotify_dashboard_pins_v1";
 const PAGE_SIZE = 15;
@@ -22,7 +23,6 @@ async function jget(path) {
   });
 
   if (res.status === 204) return { status: 204, json: null };
-
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
@@ -40,7 +40,6 @@ async function jmut(method, path, body = null) {
   });
 
   if (res.status === 204) return { status: 204, json: null };
-
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
@@ -134,6 +133,10 @@ export default function App() {
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [recentRangeKey, setRecentRangeKey] = useState("24h");
 
+  // queue/jam
+  const [queue, setQueue] = useState([]);
+  const [queueError, setQueueError] = useState("");
+
   // playlists
   const [playlists, setPlaylists] = useState([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -147,11 +150,12 @@ export default function App() {
   });
 
   // show-more toggles
-  const [expandTopTracks, setExpandTopTracks] = useState(false);
-  const [expandTopArtists, setExpandTopArtists] = useState(false);
   const [expandRecents, setExpandRecents] = useState(false);
+  const [expandQueue, setExpandQueue] = useState(false);
   const [expandPlaylists, setExpandPlaylists] = useState(false);
   const [expandPlaylistTracks, setExpandPlaylistTracks] = useState(false);
+  const [expandTopArtists, setExpandTopArtists] = useState(false);
+  const [expandTopTracks, setExpandTopTracks] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(PIN_KEY, JSON.stringify(pins));
@@ -168,7 +172,8 @@ export default function App() {
   const nowTitle = nowItem?.name ?? "";
   const nowArtists = nowItem?.artists ?? [];
   const nowAlbum = nowItem?.album?.name ?? "";
-  const nowCover = nowItem?.album?.images?.[2]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[0]?.url || null;
+  const nowCover =
+    nowItem?.album?.images?.[2]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[0]?.url || null;
   const nowUrl = nowItem?.external_urls?.spotify ?? null;
 
   // profile bits
@@ -215,33 +220,53 @@ export default function App() {
     if (activeId && !targetDeviceId) setTargetDeviceId(activeId);
   }
 
+  async function loadQueue() {
+    setQueueError("");
+    const out = await jget("/api/player/queue");
+    if (out.status >= 400) {
+      setQueue([]);
+      setQueueError(
+        out.status === 404
+          ? "Queue route not found (add /api/player/queue on the backend)."
+          : out.json?.error
+            ? String(out.json.error)
+            : `Queue request failed (${out.status})`
+      );
+      return;
+    }
+
+    // Spotify returns: { currently_playing: <track>, queue: [tracks...] }
+    const q = Array.isArray(out.json?.queue) ? out.json.queue : [];
+    setQueue(q);
+  }
+
   async function loadLibrary() {
     const recentRange = RECENT_RANGES.find((r) => r.key === recentRangeKey) || RECENT_RANGES[0];
     const after = Date.now() - recentRange.ms;
 
-    const [ta, tt, rp, pls] = await Promise.all([
-      jget("/api/top-artists?time_range=short_term&limit=50"),
-      jget("/api/top-tracks?time_range=short_term&limit=50"),
+    const [rp, pls, ta, tt] = await Promise.all([
       jget(`/api/recently-played?limit=50&after=${after}`),
-      jget("/api/playlists?limit=50&offset=0")
+      jget("/api/playlists?limit=50&offset=0"),
+      jget("/api/top-artists?time_range=short_term&limit=50"),
+      jget("/api/top-tracks?time_range=short_term&limit=50")
     ]);
 
-    const firstBad = [ta, tt, rp, pls].find((x) => x.status >= 400);
+    const firstBad = [rp, pls, ta, tt].find((x) => x.status >= 400);
     if (firstBad) {
       setMsg(firstBad.json?.error ? String(firstBad.json.error) : `Request failed (${firstBad.status})`);
     }
 
-    setTopArtists(Array.isArray(ta.json?.items) ? ta.json.items : []);
-    setTopTracks(Array.isArray(tt.json?.items) ? tt.json.items : []);
     setRecentlyPlayed(Array.isArray(rp.json?.items) ? rp.json.items : []);
     setPlaylists(Array.isArray(pls.json?.items) ? pls.json.items : []);
+    setTopArtists(Array.isArray(ta.json?.items) ? ta.json.items : []);
+    setTopTracks(Array.isArray(tt.json?.items) ? tt.json.items : []);
   }
 
   async function loadAll() {
     setLoading(true);
     setMsg("");
     try {
-      await Promise.all([loadProfile(), syncPlayer(), loadLibrary()]);
+      await Promise.all([loadProfile(), syncPlayer(), loadLibrary(), loadQueue()]);
     } finally {
       setLoading(false);
     }
@@ -249,6 +274,7 @@ export default function App() {
 
   async function logout() {
     await fetch(logoutUrl, { method: "POST", credentials: "include" });
+
     setAuthed(false);
     setMe(null);
     setPlayer(null);
@@ -256,18 +282,24 @@ export default function App() {
     setTargetDeviceId("");
     setProgressMs(0);
     setDurationMs(0);
-    setTopArtists([]);
-    setTopTracks([]);
+
     setRecentlyPlayed([]);
+    setQueue([]);
+    setQueueError("");
+
     setPlaylists([]);
     setSelectedPlaylist(null);
     setPlaylistTracks([]);
 
-    setExpandTopTracks(false);
-    setExpandTopArtists(false);
+    setTopArtists([]);
+    setTopTracks([]);
+
     setExpandRecents(false);
+    setExpandQueue(false);
     setExpandPlaylists(false);
     setExpandPlaylistTracks(false);
+    setExpandTopArtists(false);
+    setExpandTopTracks(false);
 
     setMsg("");
   }
@@ -380,7 +412,6 @@ export default function App() {
   useEffect(() => {
     if (!authed) return;
     loadLibrary();
-    // reset recents view when changing range
     setExpandRecents(false);
   }, [recentRangeKey]);
 
@@ -402,11 +433,12 @@ export default function App() {
     return () => clearInterval(id);
   }, [authed]);
 
-  const topTracksView = sliceMaybe(topTracks, expandTopTracks);
-  const topArtistsView = sliceMaybe(topArtists, expandTopArtists);
   const recentsView = sliceMaybe(recentlyPlayed, expandRecents);
+  const queueView = sliceMaybe(queue, expandQueue);
   const playlistsView = sliceMaybe(playlists, expandPlaylists);
   const playlistTracksView = sliceMaybe(playlistTracks, expandPlaylistTracks);
+  const topArtistsView = sliceMaybe(topArtists, expandTopArtists);
+  const topTracksView = sliceMaybe(topTracks, expandTopTracks);
 
   return (
     <div className="page">
@@ -414,7 +446,11 @@ export default function App() {
         <div className="title">
           <h1>Spotify Dashboard</h1>
           <p className="sub">
-            Two-column, Spotify-green cyber glow — powered by <code>{SERVER_BASE}</code>.
+            Two-column, Spotify-green cyber glow — powered by{" "}
+            <a className="link" href={SITE_URL} target="_blank" rel="noreferrer">
+              {SITE_NAME}
+            </a>
+            .
           </p>
         </div>
 
@@ -456,11 +492,11 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* Top strip: Profile + Now Playing combined */}
+          {/* Top strip: profile + now playing */}
           <div className="card topStrip">
             <div className="topStripRow">
               <div className="topStripLeft">
-                <CoverThumb url={mePic} alt="Profile" />
+                <CoverThumb url={me?.images?.[0]?.url} alt="Profile" />
                 <div className="topStripMeta">
                   <div className="topStripName">
                     <ExternalLink href={meUrl}>{meName}</ExternalLink>
@@ -520,7 +556,6 @@ export default function App() {
                       +Like
                     </button>
 
-                    {/* Simple bars visualizer */}
                     <div className={`viz ${isPlaying ? "on" : ""}`} title="Visualizer">
                       <span />
                       <span />
@@ -551,138 +586,8 @@ export default function App() {
             </div>
           </div>
 
+          {/* SECTION 1: Playlists + Playlist tracks (top, under player) */}
           <div className="grid">
-            {/* Top Tracks */}
-            <div className="card">
-              <h2>Top Tracks</h2>
-
-              {topTracksView.length ? (
-                <ul className="list">
-                  {topTracksView.map((t) => {
-                    const cover =
-                      t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url || null;
-                    return (
-                      <li key={t.id} className="row">
-                        <CoverThumb url={cover} alt="" />
-                        <div className="rowMeta">
-                          <div className="rowTitle">
-                            <ExternalLink href={t?.external_urls?.spotify}>{t.name}</ExternalLink>
-                          </div>
-                          <div className="muted">
-                            {t?.artists?.map((a, idx) => (
-                              <span key={a.id || idx}>
-                                <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
-                                {idx < t.artists.length - 1 ? ", " : ""}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <button className="btn ghost" onClick={() => likeTrack(t.id)} title="Save to Liked Songs">
-                          +Like
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="muted">No tracks loaded yet.</div>
-              )}
-
-              {topTracks.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandTopTracks((v) => !v)}>
-                  {expandTopTracks ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            {/* Top Artists */}
-            <div className="card">
-              <h2>Top Artists</h2>
-
-              {topArtistsView.length ? (
-                <ul className="list">
-                  {topArtistsView.map((a) => {
-                    const img = a?.images?.[2]?.url || a?.images?.[1]?.url || a?.images?.[0]?.url || null;
-                    return (
-                      <li key={a.id} className="row">
-                        <CoverThumb url={img} alt="" />
-                        <div className="rowMeta">
-                          <div className="rowTitle">
-                            <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
-                          </div>
-                          <div className="muted">{a?.genres?.slice(0, 3).join(", ") || "no genres"}</div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="muted">No artists loaded yet.</div>
-              )}
-
-              {topArtists.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandTopArtists((v) => !v)}>
-                  {expandTopArtists ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            {/* Recently Played */}
-            <div className="card">
-              <div className="cardHeadRow">
-                <h2 style={{ margin: 0 }}>Recently Played</h2>
-                <select value={recentRangeKey} onChange={(e) => setRecentRangeKey(e.target.value)}>
-                  {RECENT_RANGES.map((r) => (
-                    <option key={r.key} value={r.key}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {recentsView.length ? (
-                <ul className="list">
-                  {recentsView.map((it, idx) => {
-                    const tr = it?.track;
-                    if (!tr) return null;
-                    const cover =
-                      tr?.album?.images?.[2]?.url || tr?.album?.images?.[1]?.url || tr?.album?.images?.[0]?.url || null;
-                    return (
-                      <li key={`${tr.id}-${idx}`} className="row">
-                        <CoverThumb url={cover} alt="" />
-                        <div className="rowMeta">
-                          <div className="rowTitle">
-                            <ExternalLink href={tr?.external_urls?.spotify}>{tr.name}</ExternalLink>
-                          </div>
-                          <div className="muted">
-                            {tr?.artists?.map((a, i) => (
-                              <span key={a.id || i}>
-                                <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
-                                {i < tr.artists.length - 1 ? ", " : ""}
-                              </span>
-                            ))}{" "}
-                            • {secondsAgoLabel(it?.played_at)}
-                          </div>
-                        </div>
-                        <button className="btn ghost" onClick={() => likeTrack(tr.id)} title="Save to Liked Songs">
-                          +Like
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="muted">No recent plays loaded yet.</div>
-              )}
-
-              {recentlyPlayed.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
-                  {expandRecents ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            {/* Playlists (left) */}
             <div className="card">
               <h2>Playlists</h2>
 
@@ -733,7 +638,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Playlist Tracks (right, next to playlists) */}
             <div className="card">
               <h2>{selectedPlaylist ? selectedPlaylist.name : "Playlist Tracks"}</h2>
 
@@ -792,14 +696,216 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            {/* SECTION 2: Recently Played */}
+            <div className="card">
+              <div className="cardHeadRow">
+                <h2 style={{ margin: 0 }}>Recently Played</h2>
+                <select value={recentRangeKey} onChange={(e) => setRecentRangeKey(e.target.value)}>
+                  {RECENT_RANGES.map((r) => (
+                    <option key={r.key} value={r.key}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {recentsView.length ? (
+                <ul className="list">
+                  {recentsView.map((it, idx) => {
+                    const tr = it?.track;
+                    if (!tr) return null;
+                    const cover =
+                      tr?.album?.images?.[2]?.url || tr?.album?.images?.[1]?.url || tr?.album?.images?.[0]?.url || null;
+                    return (
+                      <li key={`${tr.id}-${idx}`} className="row">
+                        <CoverThumb url={cover} alt="" />
+                        <div className="rowMeta">
+                          <div className="rowTitle">
+                            <ExternalLink href={tr?.external_urls?.spotify}>{tr.name}</ExternalLink>
+                          </div>
+                          <div className="muted">
+                            {tr?.artists?.map((a, i) => (
+                              <span key={a.id || i}>
+                                <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
+                                {i < tr.artists.length - 1 ? ", " : ""}
+                              </span>
+                            ))}{" "}
+                            • {secondsAgoLabel(it?.played_at)}
+                          </div>
+                        </div>
+                        <button className="btn ghost" onClick={() => likeTrack(tr.id)} title="Save to Liked Songs">
+                          +Like
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="muted">No recent plays loaded yet.</div>
+              )}
+
+              {recentlyPlayed.length > PAGE_SIZE && (
+                <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
+                  {expandRecents ? "Less" : "More"}
+                </button>
+              )}
+            </div>
+
+            {/* SECTION 3: Queue / Jam */}
+            <div className="card">
+              <div className="cardHeadRow">
+                <h2 style={{ margin: 0 }}>Queue / Jam</h2>
+                <button className="btn ghost" onClick={loadQueue} disabled={loading}>
+                  Refresh
+                </button>
+              </div>
+
+              {queueError ? <div className="muted">{queueError}</div> : null}
+
+              {queueView.length ? (
+                <ul className="list">
+                  {queueView.map((t, idx) => {
+                    const cover =
+                      t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url || null;
+                    return (
+                      <li key={`${t.id || idx}`} className="row">
+                        <CoverThumb url={cover} alt="" />
+                        <div className="rowMeta">
+                          <div className="rowTitle">
+                            <ExternalLink href={t?.external_urls?.spotify}>{t?.name || "Unknown track"}</ExternalLink>
+                          </div>
+                          <div className="muted">
+                            {t?.artists?.map((a, i) => (
+                              <span key={a.id || i}>
+                                <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
+                                {i < t.artists.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <button className="btn ghost" onClick={() => likeTrack(t.id)} title="Save to Liked Songs">
+                          +Like
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="muted">{queueError ? "" : "Queue is empty (or Spotify doesn’t expose it on this device)."}</div>
+              )}
+
+              {queue.length > PAGE_SIZE && (
+                <button className="btn ghost moreBtn" onClick={() => setExpandQueue((v) => !v)}>
+                  {expandQueue ? "Less" : "More"}
+                </button>
+              )}
+            </div>
+
+            {/* SECTION 4: Top Artists */}
+            <div className="card">
+              <h2>Top Artists</h2>
+
+              {topArtistsView.length ? (
+                <ul className="list">
+                  {topArtistsView.map((a) => {
+                    const img = a?.images?.[2]?.url || a?.images?.[1]?.url || a?.images?.[0]?.url || null;
+                    return (
+                      <li key={a.id} className="row">
+                        <CoverThumb url={img} alt="" />
+                        <div className="rowMeta">
+                          <div className="rowTitle">
+                            <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
+                          </div>
+                          <div className="muted">{a?.genres?.slice(0, 3).join(", ") || "no genres"}</div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="muted">No artists loaded yet.</div>
+              )}
+
+              {topArtists.length > PAGE_SIZE && (
+                <button className="btn ghost moreBtn" onClick={() => setExpandTopArtists((v) => !v)}>
+                  {expandTopArtists ? "Less" : "More"}
+                </button>
+              )}
+            </div>
+
+            {/* SECTION 5: Top Tracks */}
+            <div className="card">
+              <h2>Top Tracks</h2>
+
+              {topTracksView.length ? (
+                <ul className="list">
+                  {topTracksView.map((t) => {
+                    const cover =
+                      t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url || null;
+                    return (
+                      <li key={t.id} className="row">
+                        <CoverThumb url={cover} alt="" />
+                        <div className="rowMeta">
+                          <div className="rowTitle">
+                            <ExternalLink href={t?.external_urls?.spotify}>{t.name}</ExternalLink>
+                          </div>
+                          <div className="muted">
+                            {t?.artists?.map((a, idx) => (
+                              <span key={a.id || idx}>
+                                <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
+                                {idx < t.artists.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <button className="btn ghost" onClick={() => likeTrack(t.id)} title="Save to Liked Songs">
+                          +Like
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="muted">No tracks loaded yet.</div>
+              )}
+
+              {topTracks.length > PAGE_SIZE && (
+                <button className="btn ghost moreBtn" onClick={() => setExpandTopTracks((v) => !v)}>
+                  {expandTopTracks ? "Less" : "More"}
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}
 
       <footer className="footer">
-        <span className="muted">
-          API: <code>{SERVER_BASE}</code>
-        </span>
+        <div className="footerLine">
+          <span className="muted small">
+            API:{" "}
+            <a className="link small" href={SERVER_BASE} target="_blank" rel="noreferrer">
+              {SERVER_BASE}
+            </a>
+          </span>
+        </div>
+
+        <div className="footerLine">
+          <span className="muted small">
+            Created by{" "}
+            <a className="link small" href="https://github.com/sudo13samurai" target="_blank" rel="noreferrer">
+              Krystian Carnahan
+            </a>{" "}
+            • ©2025 •{" "}
+            <a className="link small" href="mailto:hi@tildeath.site">
+              hi@tildeath.site
+            </a>{" "}
+            •{" "}
+            <a className="link small" href="https://cash.app" target="_blank" rel="noreferrer">
+              Buy me a coffee
+            </a>
+          </span>
+        </div>
       </footer>
     </div>
   );

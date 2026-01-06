@@ -331,6 +331,7 @@ app.get("/api/player/devices", (req, res) => spotifyApi(req, res, "/me/player/de
 app.get("/api/top-tracks", (req, res) => spotifyApi(req, res, "/me/top/tracks" + passthruQuery(req)));
 app.get("/api/top-artists", (req, res) => spotifyApi(req, res, "/me/top/artists" + passthruQuery(req)));
 app.get("/api/recently-played", (req, res) => spotifyApi(req, res, "/me/player/recently-played" + passthruQuery(req)));
+app.get("/api/player/queue", (req, res) => spotifyApi(req, res, "/me/player/queue"));
 app.get("/api/playlists", (req, res) => spotifyApi(req, res, "/me/playlists" + passthruQuery(req)));
 
 app.get("/api/playlists/:id/tracks", (req, res) =>
