@@ -13,7 +13,10 @@ function normPath(p) {
 }
 
 async function jget(path) {
-  const res = await fetch(`${SERVER_BASE}${normPath(path)}`, { credentials: "include" });
+  const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
+    credentials: "include",
+    cache: "no-store"
+  });
   if (res.status === 204) return { status: 204, json: null };
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
@@ -23,6 +26,7 @@ async function jmut(method, path, body = null) {
   const res = await fetch(`${SERVER_BASE}${normPath(path)}`, {
     method,
     credentials: "include",
+    cache: "no-store",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined
   });
