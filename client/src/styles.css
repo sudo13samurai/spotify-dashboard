@@ -521,3 +521,75 @@ a.link:hover {
   justify-content: center;
   margin-top: 6px;
 }
+
+/* Header brand avatar */
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brandAvatarLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandAvatar {
+  width: 56px;         /* bigger profile pic */
+  height: 56px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brandName {
+  font-weight: 900;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+/* Bigger cover art in player */
+.topStrip .thumb {
+  width: 64px;         /* bigger cover art in player + strip */
+  height: 64px;
+  border-radius: 14px;
+}
+
+/* Center the player area inside the top strip */
+.topStripNow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;     /* centers player block */
+  justify-content: center;
+}
+
+.nowRow {
+  width: 100%;
+  max-width: 980px;        /* keeps it from stretching too wide */
+  justify-content: center; /* centers content */
+}
+
+.nowMeta {
+  text-align: left;        /* keep text readable */
+}
+
+.controls {
+  justify-content: center; /* center buttons + visualizer */
+}
+
+/* Device row centered under player */
+.deviceRow {
+  width: 100%;
+  max-width: 980px;
+  justify-content: center;
+}
+.deviceRow select {
+  max-width: 520px;
+}

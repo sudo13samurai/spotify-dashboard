@@ -381,7 +381,7 @@ export default function App() {
 
   async function playPlaylist(pl, offsetPos = 0) {
     if (!pl?.uri) return;
-    setMsg("");
+	    setMsg("");
     const body = { context_uri: pl.uri, offset: { position: offsetPos }, position_ms: 0 };
     const out = await jmut("PUT", "/api/player/play", body);
     if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Play failed (active device / Premium?).");
@@ -442,35 +442,52 @@ export default function App() {
 
   return (
     <div className="page">
-      <header className="header">
-        <div className="title">
-          <h1>Spotify Dashboard</h1>
-          <p className="sub">
-            Two-column, Spotify-green cyber glow — powered by{" "}
-            <a className="link" href={SITE_URL} target="_blank" rel="noreferrer">
-              {SITE_NAME}
-            </a>
-            .
-          </p>
-        </div>
+<header className="header">
+  <div className="title">
+    <div className="brandRow">
+      <a
+        className="brandAvatarLink"
+        href={me?.external_urls?.spotify || "#"}
+        target="_blank"
+        rel="noreferrer"
+        title={me?.display_name ? `Open ${me.display_name} on Spotify` : "Open profile"}
+      >
+        <img
+          className="brandAvatar"
+          src={me?.images?.[0]?.url || ""}
+          alt={me?.display_name || "Profile"}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      </a>
 
-        <div className="actions">
-          {!authed ? (
-            <a className="btn primary" href={loginUrl}>
-              Connect Spotify
-            </a>
-          ) : (
-            <>
-              <button className="btn ghost" onClick={loadAll} disabled={loading}>
-                Refresh
-              </button>
-              <button className="btn danger" onClick={logout}>
-                Logout
-              </button>
-            </>
-          )}
+      <div className="brandText">
+        <div className="brandName">
+          <ExternalLink href={me?.external_urls?.spotify}>{me?.display_name || "Spotify"}</ExternalLink>
         </div>
-      </header>
+        <p className="sub" style={{ margin: 0 }}>
+          Two-column, Spotify-green cyber glow — powered by{" "}
+          <a className="link" href={SITE_URL} target="_blank" rel="noreferrer">
+            {SITE_NAME}
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div className="actions">
+    {!authed ? (
+      <a className="btn primary" href={loginUrl}>Connect Spotify</a>
+    ) : (
+      <>
+        <button className="btn ghost" onClick={loadAll} disabled={loading}>Refresh</button>
+        <button className="btn danger" onClick={logout}>Logout</button>
+      </>
+    )}
+  </div>
+</header>
 
       {!!msg && (
         <div className="card" style={{ minHeight: "unset", marginBottom: 14 }}>
