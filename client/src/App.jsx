@@ -527,7 +527,14 @@ export default function App() {
 
               <div className="topStripNow">
                 <div className="nowRow">
-		<div className={isPlaying ? "nowPlayingGlow" : ""}>
+
+<div className="nowCoverWrap">
+  <div className={`bgBars ${isPlaying ? "on" : ""}`} aria-hidden="true">
+    {Array.from({ length: 18 }).map((_, i) => (
+      <span key={i} />
+    ))}
+  </div>
+
   <CoverThumb url={nowCover} alt="Now playing cover" />
 </div>
                   <div className="nowMeta">
