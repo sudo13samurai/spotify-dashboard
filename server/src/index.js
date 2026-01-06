@@ -121,6 +121,7 @@ function buildAuthUrl() {
     "user-read-email",
     "user-top-read",
     "user-read-recently-played"
+    "user-library-modify"
   ].join(" ");
 
   const params = new URLSearchParams({
@@ -315,6 +316,8 @@ app.post("/auth/logout", (req, res) => {
 app.get("/callback/auth/login", (req, res) => res.redirect("/auth/login"));
 app.get("/callback/auth/status", (req, res) => res.redirect("/auth/status"));
 
+app.get("/api/me", (req, res) => spotifyApi(req, res, "/me"));
+
 // ----------------- API ROUTES -----------------
 
 // Apply auth guard to ALL /api routes
@@ -333,6 +336,29 @@ app.get("/api/playlists", (req, res) => spotifyApi(req, res, "/me/playlists" + p
 app.get("/api/playlists/:id/tracks", (req, res) =>
   spotifyApi(req, res, `/playlists/${req.params.id}/tracks` + passthruQuery(req))
 );
+
+
+app.put("/api/like", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const ids = String(req.query.ids || "").trim();
+    if (!ids) return res.status(400).json({ error: "Missing ids" });
+
+    const r = await fetch(`https://api.spotify.com/v1/me/tracks?ids=${encodeURIComponent(ids)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+    const text = await r.text();
+    return res.status(r.status).send(text);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Like failed" });
+  }
+});
 
 // player controls
 app.put("/api/player/play", (req, res) => spotifyApi(req, res, "/me/player/play"));
