@@ -607,7 +607,7 @@ export default function App() {
             </div>
           </div>
 
-{/* Playlists */}
+// SECTION 1: Playlists + Playlist tracks
           <div className="grid">
             <div className="card">
         	      <h2>Playlists</h2>
