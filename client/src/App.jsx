@@ -111,8 +111,6 @@ export default function App() {
   }, [pins]);
 
   // ✅ make these react to SERVER_BASE
-  #const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
-  #const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
   const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, [SERVER_BASE]);
   const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, [SERVER_BASE]);
 
