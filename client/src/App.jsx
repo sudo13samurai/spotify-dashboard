@@ -447,19 +447,16 @@ export default function App() {
     <div className="brandRow">
       <a
         className="brandAvatarLink"
-        href={me?.external_urls?.spotify || "#"}
+        href={me?.external_urls?.spotify || "https://open.spotify.com"}
         target="_blank"
         rel="noreferrer"
-        title={me?.display_name ? `Open ${me.display_name} on Spotify` : "Open profile"}
+        title={me?.display_name ? `Open ${me.display_name} on Spotify` : "Open Spotify"}
       >
-        <img
-          className="brandAvatar"
-          src={me?.images?.[0]?.url || ""}
-          alt={me?.display_name || "Profile"}
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
+        {me?.images?.[0]?.url ? (
+          <img className="brandAvatar" src={me.images[0].url} alt={me.display_name || "Profile"} />
+        ) : (
+          <div className="brandAvatar brandAvatarFallback" aria-hidden="true" />
+        )}
       </a>
 
       <div className="brandText">
@@ -468,8 +465,8 @@ export default function App() {
         </div>
         <p className="sub" style={{ margin: 0 }}>
           Two-column, Spotify-green cyber glow — powered by{" "}
-          <a className="link" href={SITE_URL} target="_blank" rel="noreferrer">
-            {SITE_NAME}
+          <a className="link" href="https://tildeath.site" target="_blank" rel="noreferrer">
+            tildeath.site
           </a>
           .
         </p>
