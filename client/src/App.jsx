@@ -610,9 +610,8 @@ export default function App() {
           {/* SECTION 1: Playlists + Playlist tracks (top, under player) */}
           <div className="grid">
             <div className="card">
-              <h2>Playlists</h2>
-
-              {!!pinnedPlaylists.length && (
+        	      <h2>Playlists</h2>
+	    {!!pinnedPlaylists.length && (
                 <div className="muted" style={{ marginBottom: 10 }}>
                   Pinned: {pinnedPlaylists.map((p) => p.name).join(" • ")}
                 </div>

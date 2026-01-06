@@ -362,15 +362,16 @@ app.put("/api/like", async (req, res) => {
 });
 
 // player controls
-app.put("/api/player/play", (req, res) => spotifyApi(req, res, "/me/player/play"));
-app.put("/api/player/pause", (req, res) => spotifyApi(req, res, "/me/player/pause"));
-app.post("/api/player/next", (req, res) => spotifyApi(req, res, "/me/player/next"));
-app.post("/api/player/previous", (req, res) => spotifyApi(req, res, "/me/player/previous"));
-app.put("/api/player/shuffle", (req, res) => spotifyApi(req, res, `/me/player/shuffle${passthruQuery(req)}`));
-app.put("/api/player/repeat", (req, res) => spotifyApi(req, res, `/me/player/repeat${passthruQuery(req)}`));
-app.put("/api/player/volume", (req, res) => spotifyApi(req, res, `/me/player/volume${passthruQuery(req)}`));
-app.put("/api/player/seek", (req, res) => spotifyApi(req, res, `/me/player/seek${passthruQuery(req)}`));
+app.post("/api/player/next", (req, res) => spotifyApi(req, res, "/me/player/next", "POST"));
+app.post("/api/player/previous", (req, res) => spotifyApi(req, res, "/me/player/previous", "POST"));
 
+app.put("/api/player/play", (req, res) => spotifyApi(req, res, "/me/player/play", "PUT"));
+app.put("/api/player/pause", (req, res) => spotifyApi(req, res, "/me/player/pause", "PUT"));
+
+app.put("/api/player/shuffle", (req, res) => spotifyApi(req, res, "/me/player/shuffle", "PUT"));
+app.put("/api/player/repeat", (req, res) => spotifyApi(req, res, "/me/player/repeat", "PUT"));
+
+app.put("/api/player/transfer", (req, res) => spotifyApi(req, res, "/me/player", "PUT"));
 app.put("/api/player/transfer", async (req, res) => {
   try {
     const token = await getValidAccessToken();
