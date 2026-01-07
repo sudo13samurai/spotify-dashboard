@@ -385,3 +385,70 @@ select {
   justify-content: center;
   padding: 8px;
 }
+
+
+/* ---- TABLE/LIST ROWS: make them fluid + prevent title overflow ---- */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Each row becomes a flexible container */
+.row {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0; /* critical: allows children to shrink */
+}
+
+/* Cover art fixed, text area flex */
+.thumb {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+/* Text container must be allowed to shrink */
+.rowMeta {
+  flex: 1 1 auto;
+  min-width: 0; /* critical */
+}
+
+/* Make long titles behave */
+.rowTitle,
+.rowTitle a {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Artist/sub lines should also clamp */
+.rowMeta .muted,
+.rowMeta .muted a {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* If you have any right-side columns/actions in rows, keep them from crushing titles */
+.rowActions,
+.rowRight {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Prevent links inside rows from blowing up layout */
+.link {
+  max-width: 100%;
+}
