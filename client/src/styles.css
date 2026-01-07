@@ -730,3 +730,220 @@ a.link:hover {
   font-size: 20px;
   line-height: 1.1;
 }
+
+/* Header avatar */
+.headerBrand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brandAvatarLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandAvatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.06);
+}
+
+.brandAvatarFallback {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Player layout */
+.playerCard .playerRow {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.playerLeft {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 280px;
+}
+
+.playerMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.playerControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.moreBtn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+/* Equalizer viz */
+.viz {
+  display: inline-flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 18px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.viz span {
+  width: 3px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(29, 185, 84, 0.85);
+  opacity: 0.65;
+}
+
+.viz.on span {
+  opacity: 0.95;
+  animation: vizBounce 0.9s infinite ease-in-out;
+}
+
+.viz.on span:nth-child(2) { animation-delay: 0.10s; }
+.viz.on span:nth-child(3) { animation-delay: 0.20s; }
+.viz.on span:nth-child(4) { animation-delay: 0.05s; }
+.viz.on span:nth-child(5) { animation-delay: 0.18s; }
+.viz.on span:nth-child(6) { animation-delay: 0.12s; }
+.viz.on span:nth-child(7) { animation-delay: 0.25s; }
+.viz.on span:nth-child(8) { animation-delay: 0.08s; }
+
+@keyframes vizBounce {
+  0%   { transform: scaleY(0.6); }
+  50%  { transform: scaleY(2.2); }
+  100% { transform: scaleY(0.7); }
+}
+/* Header avatar */
+.headerBrand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brandAvatarLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandAvatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.06);
+}
+
+.brandAvatarFallback {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Player layout */
+.playerCard .playerRow {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.playerLeft {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 280px;
+}
+
+.playerMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.playerControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.moreBtn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+/* Equalizer viz */
+.viz {
+  display: inline-flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 18px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.viz span {
+  width: 3px;
+  height: 6px;
+  border-radius: 2px;
+  background: rgba(29, 185, 84, 0.85);
+  opacity: 0.65;
+}
+
+.viz.on span {
+  opacity: 0.95;
+  animation: vizBounce 0.9s infinite ease-in-out;
+}
+
+.viz.on span:nth-child(2) { animation-delay: 0.10s; }
+.viz.on span:nth-child(3) { animation-delay: 0.20s; }
+.viz.on span:nth-child(4) { animation-delay: 0.05s; }
+.viz.on span:nth-child(5) { animation-delay: 0.18s; }
+.viz.on span:nth-child(6) { animation-delay: 0.12s; }
+.viz.on span:nth-child(7) { animation-delay: 0.25s; }
+.viz.on span:nth-child(8) { animation-delay: 0.08s; }
+
+@keyframes vizBounce {
+  0%   { transform: scaleY(0.6); }
+  50%  { transform: scaleY(2.2); }
+  100% { transform: scaleY(0.7); }
+}
