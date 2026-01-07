@@ -92,9 +92,10 @@ export default function App() {
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [playlists, setPlaylists] = useState([]);
 
-  // Queue / Jam
+  // Queue / Jam (server may not support yet)
   const [queueItems, setQueueItems] = useState([]);
   const [expandQueue, setExpandQueue] = useState(false);
+  const [queueSupported, setQueueSupported] = useState(null); // null = unknown, false = missing route
 
   // Playlists -> Tracks
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -119,6 +120,8 @@ export default function App() {
   const nowUrl = nowItem?.external_urls?.spotify ?? null;
   const nowCover =
     nowItem?.album?.images?.[0]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[2]?.url || null;
+
+  const [likeSupported, setLikeSupported] = useState(null); // null unknown, false missing route
 
   async function refreshStatus() {
     const out = await jget("/auth/status");
@@ -150,13 +153,26 @@ export default function App() {
     }
   }
 
-  async function loadQueue() {
-    // backend route commonly: /api/player/queue
+  async function loadQueueIfSupported() {
+    // If we already learned it doesn't exist, don't keep calling it.
+    if (queueSupported === false) return;
+
     const out = await jget("/api/player/queue");
-    if (out.status >= 400 || !out.json) {
+
+    if (out.status === 404) {
+      setQueueSupported(false);
       setQueueItems([]);
       return;
     }
+
+    if (out.status >= 400 || !out.json) {
+      // don’t spam msg; just treat as empty
+      setQueueSupported(true);
+      setQueueItems([]);
+      return;
+    }
+
+    setQueueSupported(true);
     const items = Array.isArray(out.json?.queue) ? out.json.queue : [];
     setQueueItems(items);
   }
@@ -168,19 +184,15 @@ export default function App() {
     setPlaylistTracks([]);
     setExpandPlaylistTracks(false);
 
-    // Try common patterns (supports whichever your server has)
     const try1 = await jget(`/api/playlists/${encodeURIComponent(playlistId)}/tracks?limit=50`);
     if (try1.status < 400 && try1.json) {
-      const items = Array.isArray(try1.json?.items) ? try1.json.items : [];
-      // Spotify playlist tracks are typically { track: {...} }
-      setPlaylistTracks(items);
+      setPlaylistTracks(Array.isArray(try1.json?.items) ? try1.json.items : []);
       return;
     }
 
     const try2 = await jget(`/api/playlist-tracks?playlist_id=${encodeURIComponent(playlistId)}&limit=50`);
     if (try2.status < 400 && try2.json) {
-      const items = Array.isArray(try2.json?.items) ? try2.json.items : [];
-      setPlaylistTracks(items);
+      setPlaylistTracks(Array.isArray(try2.json?.items) ? try2.json.items : []);
       return;
     }
 
@@ -205,7 +217,7 @@ export default function App() {
       if (rp.status < 400) setRecentlyPlayed(rp.json?.items || []);
       if (pls.status < 400) setPlaylists(pls.json?.items || []);
 
-      await Promise.all([syncPlayer(), loadQueue()]);
+      await Promise.all([syncPlayer(), loadQueueIfSupported()]);
     } finally {
       setLoading(false);
     }
@@ -235,24 +247,24 @@ export default function App() {
     setTimeout(syncPlayer, 600);
   }
 
-  // NOTE: using PUT to avoid your earlier 405 (your backend expects PUT right now)
+  // ✅ You said these are POST on your server
   async function nextTrack() {
     setMsg("");
-    const out = await jmut("PUT", "/api/player/next");
+    const out = await jmut("POST", "/api/player/next");
     if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Next failed.");
     setTimeout(() => {
       syncPlayer();
-      loadQueue();
+      loadQueueIfSupported();
     }, 700);
   }
 
   async function prevTrack() {
     setMsg("");
-    const out = await jmut("PUT", "/api/player/previous");
+    const out = await jmut("POST", "/api/player/previous");
     if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Previous failed.");
     setTimeout(() => {
       syncPlayer();
-      loadQueue();
+      loadQueueIfSupported();
     }, 700);
   }
 
@@ -283,12 +295,29 @@ export default function App() {
   async function likeNow() {
     const id = nowItem?.id;
     if (!id) return;
-    setMsg("");
-    const out = await jmut("PUT", `/api/like?ids=${encodeURIComponent(id)}`);
-    if (out.status >= 400) {
-      setMsg(out.json?.error ? String(out.json.error) : "Like failed (need user-library-modify scope + /api/like).");
+
+    // If we already learned it doesn't exist, don't keep hitting it
+    if (likeSupported === false) {
+      setMsg("Like isn’t wired up yet (missing /api/like on server).");
       return;
     }
+
+    setMsg("");
+    const out = await jmut("PUT", `/api/like?ids=${encodeURIComponent(id)}`);
+
+    if (out.status === 404) {
+      setLikeSupported(false);
+      setMsg("Like isn’t wired up yet (missing /api/like on server).");
+      return;
+    }
+
+    if (out.status >= 400) {
+      setLikeSupported(true);
+      setMsg(out.json?.error ? String(out.json.error) : "Like failed.");
+      return;
+    }
+
+    setLikeSupported(true);
     setMsg("Saved to Liked Songs ✨");
   }
 
@@ -304,10 +333,10 @@ export default function App() {
     if (!authed) return;
     const id = setInterval(() => {
       syncPlayer();
-      loadQueue();
+      loadQueueIfSupported();
     }, 7000);
     return () => clearInterval(id);
-  }, [authed]);
+  }, [authed, queueSupported]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -358,7 +387,7 @@ export default function App() {
 
         <div className="actions">
           {!authed ? (
-            <a className="btn primary" href={`${SERVER_BASE}/auth/login`}>
+            <a className="btn primary" href={loginUrl}>
               Connect Spotify
             </a>
           ) : (
@@ -435,14 +464,7 @@ export default function App() {
                 </button>
 
                 <div className={`viz ${isPlaying ? "on" : ""}`} title="Equalizer">
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
+                  <span /><span /><span /><span /><span /><span /><span /><span />
                 </div>
               </div>
             </div>
@@ -463,8 +485,7 @@ export default function App() {
           </div>
 
           {/* ORDERED TABLES */}
-
-          {/* 1) Playlists + Playlist Tracks (top, under player) */}
+          {/* 1) Playlists + Playlist Tracks */}
           <div className="grid">
             <div className="card">
               <h2>Playlists</h2>
@@ -509,7 +530,7 @@ export default function App() {
                 <>
                   <ul className="list">
                     {playlistTracksView.map((it, i) => {
-                      const t = it?.track || it; // supports either shape
+                      const t = it?.track || it;
                       const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
                       return (
                         <li className="row" key={t?.id || `${selectedPlaylist.id}-${i}`}>
@@ -535,7 +556,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 2) Recently Played */}
+          {/* 2) Recently Played + 3) Queue/Jam */}
           <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
               <h2>Recently Played</h2>
@@ -563,11 +584,12 @@ export default function App() {
               )}
             </div>
 
-            {/* 3) Queue / Jam */}
             <div className="card">
               <h2>Queue / Jam</h2>
-              {queueItems.length === 0 ? (
-                <div className="muted">Queue is empty (or the server route isn’t enabled yet).</div>
+              {queueSupported === false ? (
+                <div className="muted">Queue isn’t enabled on the server yet (missing /api/player/queue).</div>
+              ) : queueItems.length === 0 ? (
+                <div className="muted">Queue is empty.</div>
               ) : (
                 <>
                   <ul className="list">
