@@ -92,10 +92,9 @@ export default function App() {
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [playlists, setPlaylists] = useState([]);
 
-  // Queue / Jam (server may not support yet)
+  // Queue / Jam
   const [queueItems, setQueueItems] = useState([]);
   const [expandQueue, setExpandQueue] = useState(false);
-  const [queueSupported, setQueueSupported] = useState(null); // null = unknown, false = missing route
 
   // Playlists -> Tracks
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -120,8 +119,6 @@ export default function App() {
   const nowUrl = nowItem?.external_urls?.spotify ?? null;
   const nowCover =
     nowItem?.album?.images?.[0]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[2]?.url || null;
-
-  const [likeSupported, setLikeSupported] = useState(null); // null unknown, false missing route
 
   async function refreshStatus() {
     const out = await jget("/auth/status");
@@ -153,26 +150,12 @@ export default function App() {
     }
   }
 
-  async function loadQueueIfSupported() {
-    // If we already learned it doesn't exist, don't keep calling it.
-    if (queueSupported === false) return;
-
+  async function loadQueue() {
     const out = await jget("/api/player/queue");
-
-    if (out.status === 404) {
-      setQueueSupported(false);
-      setQueueItems([]);
-      return;
-    }
-
     if (out.status >= 400 || !out.json) {
-      // don’t spam msg; just treat as empty
-      setQueueSupported(true);
       setQueueItems([]);
       return;
     }
-
-    setQueueSupported(true);
     const items = Array.isArray(out.json?.queue) ? out.json.queue : [];
     setQueueItems(items);
   }
@@ -217,7 +200,7 @@ export default function App() {
       if (rp.status < 400) setRecentlyPlayed(rp.json?.items || []);
       if (pls.status < 400) setPlaylists(pls.json?.items || []);
 
-      await Promise.all([syncPlayer(), loadQueueIfSupported()]);
+      await Promise.all([syncPlayer(), loadQueue()]);
     } finally {
       setLoading(false);
     }
@@ -247,14 +230,13 @@ export default function App() {
     setTimeout(syncPlayer, 600);
   }
 
-  // ✅ You said these are POST on your server
   async function nextTrack() {
     setMsg("");
     const out = await jmut("POST", "/api/player/next");
     if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Next failed.");
     setTimeout(() => {
       syncPlayer();
-      loadQueueIfSupported();
+      loadQueue();
     }, 700);
   }
 
@@ -264,7 +246,7 @@ export default function App() {
     if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Previous failed.");
     setTimeout(() => {
       syncPlayer();
-      loadQueueIfSupported();
+      loadQueue();
     }, 700);
   }
 
@@ -296,28 +278,12 @@ export default function App() {
     const id = nowItem?.id;
     if (!id) return;
 
-    // If we already learned it doesn't exist, don't keep hitting it
-    if (likeSupported === false) {
-      setMsg("Like isn’t wired up yet (missing /api/like on server).");
-      return;
-    }
-
     setMsg("");
     const out = await jmut("PUT", `/api/like?ids=${encodeURIComponent(id)}`);
-
-    if (out.status === 404) {
-      setLikeSupported(false);
-      setMsg("Like isn’t wired up yet (missing /api/like on server).");
-      return;
-    }
-
     if (out.status >= 400) {
-      setLikeSupported(true);
       setMsg(out.json?.error ? String(out.json.error) : "Like failed.");
       return;
     }
-
-    setLikeSupported(true);
     setMsg("Saved to Liked Songs ✨");
   }
 
@@ -333,10 +299,10 @@ export default function App() {
     if (!authed) return;
     const id = setInterval(() => {
       syncPlayer();
-      loadQueueIfSupported();
+      loadQueue();
     }, 7000);
     return () => clearInterval(id);
-  }, [authed, queueSupported]);
+  }, [authed]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -484,9 +450,69 @@ export default function App() {
             </div>
           </div>
 
-          {/* ORDERED TABLES */}
-          {/* 1) Playlists + Playlist Tracks */}
-          <div className="grid">
+          {/* ✅ NEW ORDER */}
+          {/* 1) Recently Played + 2) Queue/Jam */}
+          <div className="grid" style={{ marginTop: 14 }}>
+            <div className="card">
+              <h2>Recently Played</h2>
+              <ul className="list">
+                {recentsView.map((r, i) => {
+                  const t = r?.track;
+                  const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+                  return (
+                    <li className="row" key={`${t?.id || i}`}>
+                      <CoverThumb url={cover} alt="" />
+                      <div className="rowMeta">
+                        <div className="rowTitle">
+                          <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
+                        </div>
+                        <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {recentlyPlayed.length > PAGE_SIZE && (
+                <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
+                  {expandRecents ? "Less" : "More"}
+                </button>
+              )}
+            </div>
+
+            <div className="card">
+              <h2>Queue / Jam</h2>
+              {queueItems.length === 0 ? (
+                <div className="muted">Queue is empty.</div>
+              ) : (
+                <>
+                  <ul className="list">
+                    {queueView.map((t, i) => {
+                      const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+                      return (
+                        <li className="row" key={t?.id || `q-${i}`}>
+                          <CoverThumb url={cover} alt="" />
+                          <div className="rowMeta">
+                            <div className="rowTitle">
+                              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
+                            </div>
+                            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {queueItems.length > PAGE_SIZE && (
+                    <button className="btn ghost moreBtn" onClick={() => setExpandQueue((v) => !v)}>
+                      {expandQueue ? "Less" : "More"}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 3) Playlists + 4) Playlist Tracks */}
+          <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
               <h2>Playlists</h2>
               <ul className="list">
@@ -556,69 +582,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 2) Recently Played + 3) Queue/Jam */}
-          <div className="grid" style={{ marginTop: 14 }}>
-            <div className="card">
-              <h2>Recently Played</h2>
-              <ul className="list">
-                {recentsView.map((r, i) => {
-                  const t = r?.track;
-                  const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                  return (
-                    <li className="row" key={`${t?.id || i}`}>
-                      <CoverThumb url={cover} alt="" />
-                      <div className="rowMeta">
-                        <div className="rowTitle">
-                          <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
-                        </div>
-                        <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              {recentlyPlayed.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
-                  {expandRecents ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            <div className="card">
-              <h2>Queue / Jam</h2>
-              {queueSupported === false ? (
-                <div className="muted">Queue isn’t enabled on the server yet (missing /api/player/queue).</div>
-              ) : queueItems.length === 0 ? (
-                <div className="muted">Queue is empty.</div>
-              ) : (
-                <>
-                  <ul className="list">
-                    {queueView.map((t, i) => {
-                      const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                      return (
-                        <li className="row" key={t?.id || `q-${i}`}>
-                          <CoverThumb url={cover} alt="" />
-                          <div className="rowMeta">
-                            <div className="rowTitle">
-                              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
-                            </div>
-                            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {queueItems.length > PAGE_SIZE && (
-                    <button className="btn ghost moreBtn" onClick={() => setExpandQueue((v) => !v)}>
-                      {expandQueue ? "Less" : "More"}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* 4) Top Artists + 5) Top Tracks */}
+          {/* 5) Top Artists + 6) Top Tracks */}
           <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
               <h2>Top Artists</h2>

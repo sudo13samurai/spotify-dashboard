@@ -338,6 +338,55 @@ app.get("/api/playlists/:id/tracks", (req, res) =>
   spotifyApi(req, res, `/playlists/${req.params.id}/tracks` + passthruQuery(req))
 );
 
+// Queue (GET)
+app.get("/api/player/queue", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const r = await fetch("https://api.spotify.com/v1/me/player/queue", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text);
+
+    res.type("json").send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Queue fetch failed" });
+  }
+});
+
+// Like / Save track(s) to library (PUT /me/tracks?ids=...)
+app.put("/api/like", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    // pass-through query string (ids=...)
+    const qs = req.url.split("?")[1] || "";
+    const url = `https://api.spotify.com/v1/me/tracks${qs ? `?${qs}` : ""}`;
+
+    const r = await fetch(url, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text);
+
+    res.type("json").send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Like failed" });
+  }
+});
+
 
 app.put("/api/like", async (req, res) => {
   try {
