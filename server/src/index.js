@@ -121,7 +121,9 @@ function buildAuthUrl() {
     "user-read-email",
     "user-top-read",
     "user-read-recently-played",
-    "user-library-modify"
+    "user-library-modify",
+    "playlist-modify-private",
+    "playlist-modify-public"
   ].join(" ");
 
   const params = new URLSearchParams({
@@ -317,6 +319,151 @@ app.get("/callback/auth/login", (req, res) => res.redirect("/auth/login"));
 app.get("/callback/auth/status", (req, res) => res.redirect("/auth/status"));
 
 app.get("/api/me", (req, res) => spotifyApi(req, res, "/me"));
+
+// ===== Queue: Add a track to queue =====
+// POST /api/player/queue/add?uri=spotify:track:...
+app.post("/api/player/queue/add", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const uri = req.query.uri;
+    if (!uri) return res.status(400).json({ error: "Missing ?uri=" });
+
+    const r = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (r.status === 204) return res.sendStatus(204);
+
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text);
+
+    res.type("json").send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Add to queue failed" });
+  }
+});
+
+
+// ===== Radio: build a "queue" from a seed track and start playback =====
+// POST /api/player/radio?seed_track_id=TRACK_ID&limit=25
+app.post("/api/player/radio", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const seed = req.query.seed_track_id;
+    const limit = Math.min(parseInt(req.query.limit || "25", 10), 50);
+    if (!seed) return res.status(400).json({ error: "Missing ?seed_track_id=" });
+
+    const recUrl = `https://api.spotify.com/v1/recommendations?seed_tracks=${encodeURIComponent(seed)}&limit=${limit}`;
+    const rr = await fetch(recUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const recJson = await rr.json().catch(() => null);
+    if (!rr.ok) return res.status(rr.status).json(recJson || { error: "Recommendations failed" });
+
+    const uris = (recJson?.tracks || []).map((t) => t?.uri).filter(Boolean);
+    if (!uris.length) return res.status(400).json({ error: "No recommendations returned" });
+
+    const pr = await fetch("https://api.spotify.com/v1/me/player/play", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ uris })
+    });
+
+    if (pr.status === 204) return res.sendStatus(204);
+
+    const text = await pr.text();
+    if (!pr.ok) return res.status(pr.status).send(text);
+
+    res.type("json").send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Radio failed" });
+  }
+});
+
+
+// ===== Create a playlist for the current user =====
+// POST /api/playlists/create  body: { name: "My Playlist", description?: "", public?: false }
+app.post("/api/playlists/create", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const { name, description = "", public: isPublic = false } = req.body || {};
+    if (!name) return res.status(400).json({ error: "Missing playlist name" });
+
+    // Find user id
+    const me = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const meJson = await me.json().catch(() => null);
+    if (!me.ok) return res.status(me.status).json(meJson || { error: "Failed to get /me" });
+
+    const userId = meJson?.id;
+    if (!userId) return res.status(400).json({ error: "No user id" });
+
+    const r = await fetch(`https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name,
+        description,
+        public: Boolean(isPublic)
+      })
+    });
+
+    const json = await r.json().catch(() => null);
+    if (!r.ok) return res.status(r.status).json(json || { error: "Create playlist failed" });
+
+    res.json(json);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Create playlist failed" });
+  }
+});
+
+
+// ===== Add track(s) to a playlist =====
+// POST /api/playlists/:playlistId/add   body: { uris: ["spotify:track:..."] }
+app.post("/api/playlists/:playlistId/add", async (req, res) => {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const playlistId = req.params.playlistId;
+    const { uris } = req.body || {};
+    if (!playlistId) return res.status(400).json({ error: "Missing playlist id" });
+    if (!Array.isArray(uris) || !uris.length) return res.status(400).json({ error: "Missing uris[]" });
+
+    const r = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ uris })
+    });
+
+    const json = await r.json().catch(() => null);
+    if (!r.ok) return res.status(r.status).json(json || { error: "Add to playlist failed" });
+
+    res.json(json);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Add to playlist failed" });
+  }
+});
+
 
 // ----------------- API ROUTES -----------------
 
