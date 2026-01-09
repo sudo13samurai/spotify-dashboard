@@ -1,10 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const SERVER_BASE = (import.meta.env.VITE_SERVER_BASE || "https://spotify-dashboard-xw5t.onrender.com").replace(
-  /\/$/,
-  ""
-);
-
+const SERVER_BASE = (import.meta.env.VITE_SERVER_BASE || "https://spotify-dashboard-xw5t.onrender.com").replace(/\/$/, "");
 const PAGE_SIZE = 15;
 
 function normPath(p) {
@@ -72,6 +68,26 @@ function NowCoverWithBars({ coverUrl, isPlaying }) {
   );
 }
 
+// Spotify uses: short_term (≈4w), medium_term (≈6m), long_term (all time)
+const RANGE_OPTIONS = [
+  { label: "30 days", value: "short_term" },
+  { label: "6 months", value: "medium_term" },
+  { label: "All time", value: "long_term" }
+];
+
+const RECENTS_FILTERS = [
+  { label: "24 hours", value: "24h" },
+  { label: "3 days", value: "3d" },
+  { label: "30 days", value: "30d" }
+];
+
+function cutoffDate(key) {
+  const now = Date.now();
+  if (key === "24h") return new Date(now - 24 * 60 * 60 * 1000);
+  if (key === "3d") return new Date(now - 3 * 24 * 60 * 60 * 1000);
+  return new Date(now - 30 * 24 * 60 * 60 * 1000);
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -92,11 +108,9 @@ export default function App() {
   const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [playlists, setPlaylists] = useState([]);
 
-  // Queue / Jam
   const [queueItems, setQueueItems] = useState([]);
   const [expandQueue, setExpandQueue] = useState(false);
 
-  // Playlists -> Tracks
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState([]);
   const [expandPlaylistTracks, setExpandPlaylistTracks] = useState(false);
@@ -105,6 +119,14 @@ export default function App() {
   const [expandTopTracks, setExpandTopTracks] = useState(false);
   const [expandRecents, setExpandRecents] = useState(false);
   const [expandPlaylists, setExpandPlaylists] = useState(false);
+
+  // NEW: dropdown state
+  const [topArtistsRange, setTopArtistsRange] = useState("short_term");
+  const [topTracksRange, setTopTracksRange] = useState("short_term");
+  const [recentsFilter, setRecentsFilter] = useState("3d");
+
+  // NEW: playlist actions state
+  const [playlistTargetId, setPlaylistTargetId] = useState("");
 
   const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, []);
   const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, []);
@@ -182,25 +204,39 @@ export default function App() {
     setMsg("Couldn’t load playlist tracks (server route missing).");
   }
 
+  async function loadTopArtists(range) {
+    const out = await jget(`/api/top-artists?time_range=${encodeURIComponent(range)}&limit=50`);
+    if (out.status < 400) setTopArtists(out.json?.items || []);
+  }
+
+  async function loadTopTracks(range) {
+    const out = await jget(`/api/top-tracks?time_range=${encodeURIComponent(range)}&limit=50`);
+    if (out.status < 400) setTopTracks(out.json?.items || []);
+  }
+
+  async function loadRecents() {
+    const out = await jget(`/api/recently-played?limit=50`);
+    if (out.status < 400) setRecentlyPlayed(out.json?.items || []);
+  }
+
   async function loadAll() {
     setLoading(true);
     setMsg("");
     try {
-      const [meO, ta, tt, rp, pls] = await Promise.all([
-        jget("/api/me"),
-        jget("/api/top-artists?limit=50"),
-        jget("/api/top-tracks?limit=50"),
-        jget("/api/recently-played?limit=50"),
-        jget("/api/playlists?limit=50")
-      ]);
-
+      const [meO, pls] = await Promise.all([jget("/api/me"), jget("/api/playlists?limit=50")]);
       if (meO.status < 400) setMe(meO.json);
-      if (ta.status < 400) setTopArtists(ta.json?.items || []);
-      if (tt.status < 400) setTopTracks(tt.json?.items || []);
-      if (rp.status < 400) setRecentlyPlayed(rp.json?.items || []);
-      if (pls.status < 400) setPlaylists(pls.json?.items || []);
+      if (pls.status < 400) {
+        setPlaylists(pls.json?.items || []);
+        if (!playlistTargetId && (pls.json?.items || []).length) setPlaylistTargetId(pls.json.items[0].id);
+      }
 
-      await Promise.all([syncPlayer(), loadQueue()]);
+      await Promise.all([
+        loadTopArtists(topArtistsRange),
+        loadTopTracks(topTracksRange),
+        loadRecents(),
+        syncPlayer(),
+        loadQueue()
+      ]);
     } finally {
       setLoading(false);
     }
@@ -222,7 +258,7 @@ export default function App() {
     setPlaylistTracks([]);
   }
 
-  // Player controls
+  // Controls (fixed methods)
   async function playPause() {
     setMsg("");
     const out = isPlaying ? await jmut("PUT", "/api/player/pause") : await jmut("PUT", "/api/player/play");
@@ -274,17 +310,76 @@ export default function App() {
     setTimeout(syncPlayer, 800);
   }
 
-  async function likeNow() {
+  // NEW: Add to Queue
+  async function addNowToQueue() {
+    const uri = nowItem?.uri;
+    if (!uri) return;
+    setMsg("");
+    const out = await jmut("POST", `/api/player/queue/add?uri=${encodeURIComponent(uri)}`);
+    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Add to queue failed.");
+    setTimeout(loadQueue, 700);
+  }
+
+  // NEW: Start radio from current track
+  async function startRadioFromNow() {
     const id = nowItem?.id;
     if (!id) return;
+    setMsg("");
+    const out = await jmut("POST", `/api/player/radio?seed_track_id=${encodeURIComponent(id)}&limit=25`);
+    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Radio failed.");
+    setTimeout(() => {
+      syncPlayer();
+      loadQueue();
+    }, 800);
+  }
+
+  // NEW: Create playlist from current track
+  async function createPlaylistFromNow() {
+    const uri = nowItem?.uri;
+    if (!uri) return;
+    const name = window.prompt("New playlist name:", `From: ${nowTitle || "Now Playing"}`);
+    if (!name) return;
 
     setMsg("");
-    const out = await jmut("PUT", `/api/like?ids=${encodeURIComponent(id)}`);
-    if (out.status >= 400) {
-      setMsg(out.json?.error ? String(out.json.error) : "Like failed.");
+    const created = await jmut("POST", "/api/playlists/create", {
+      name,
+      description: "Created from tildeath.site dashboard",
+      public: false
+    });
+
+    if (created.status >= 400) {
+      setMsg(created.json?.error ? String(created.json.error) : "Create playlist failed.");
       return;
     }
-    setMsg("Saved to Liked Songs ✨");
+
+    const playlistId = created.json?.id;
+    if (!playlistId) {
+      setMsg("Playlist created, but no playlist id returned.");
+      return;
+    }
+
+    const added = await jmut("POST", `/api/playlists/${encodeURIComponent(playlistId)}/add`, { uris: [uri] });
+    if (added.status >= 400) {
+      setMsg(added.json?.error ? String(added.json.error) : "Created playlist, but failed to add track.");
+      return;
+    }
+
+    setMsg("Playlist created + track added ✨");
+    await jget("/api/playlists?limit=50").then((pls) => {
+      if (pls.status < 400) setPlaylists(pls.json?.items || []);
+    });
+  }
+
+  // NEW: Add current track to selected playlist
+  async function addNowToPlaylist() {
+    const uri = nowItem?.uri;
+    if (!uri) return;
+    if (!playlistTargetId) return setMsg("Pick a playlist first.");
+
+    setMsg("");
+    const out = await jmut("POST", `/api/playlists/${encodeURIComponent(playlistTargetId)}/add`, { uris: [uri] });
+    if (out.status >= 400) setMsg(out.json?.error ? String(out.json.error) : "Add to playlist failed.");
+    else setMsg("Added to playlist ✨");
   }
 
   useEffect(() => {
@@ -314,11 +409,17 @@ export default function App() {
     return () => clearInterval(id);
   }, [player, durationMs]);
 
-  const recentsView = (expandRecents ? recentlyPlayed : recentlyPlayed.slice(0, PAGE_SIZE)) || [];
+  // Views + filtering
+  const cutoff = cutoffDate(recentsFilter);
+  const filteredRecents = (recentlyPlayed || []).filter((r) => {
+    const ts = r?.played_at ? new Date(r.played_at) : null;
+    return ts ? ts >= cutoff : true;
+  });
+
+  const recentsView = (expandRecents ? filteredRecents : filteredRecents.slice(0, PAGE_SIZE)) || [];
   const topArtistsView = (expandTopArtists ? topArtists : topArtists.slice(0, PAGE_SIZE)) || [];
   const topTracksView = (expandTopTracks ? topTracks : topTracks.slice(0, PAGE_SIZE)) || [];
   const playlistsView = (expandPlaylists ? playlists : playlists.slice(0, PAGE_SIZE)) || [];
-
   const queueView = (expandQueue ? queueItems : queueItems.slice(0, PAGE_SIZE)) || [];
   const playlistTracksView = (expandPlaylistTracks ? playlistTracks : playlistTracks.slice(0, PAGE_SIZE)) || [];
 
@@ -425,12 +526,43 @@ export default function App() {
                 <button className="btn ghost" onClick={cycleRepeat} title="Repeat">
                   Rep:{repeatState === "context" ? "C" : repeatState === "track" ? "1" : "Off"}
                 </button>
-                <button className="btn ghost" onClick={likeNow} title="Save to Liked Songs" disabled={!nowItem?.id}>
-                  +Like
+
+                <button className="btn ghost" onClick={addNowToQueue} title="Add current track to queue" disabled={!nowItem?.uri}>
+                  +Queue
+                </button>
+                <button className="btn ghost" onClick={startRadioFromNow} title="Start a radio from this track" disabled={!nowItem?.id}>
+                  Radio
+                </button>
+
+                <button className="btn ghost" onClick={createPlaylistFromNow} title="Create a playlist from current track" disabled={!nowItem?.uri}>
+                  +NewList
+                </button>
+
+                <select
+                  value={playlistTargetId}
+                  onChange={(e) => setPlaylistTargetId(e.target.value)}
+                  title="Pick playlist to add current track"
+                  style={{ maxWidth: 220 }}
+                >
+                  {(playlists || []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn ghost" onClick={addNowToPlaylist} title="Add current track to selected playlist" disabled={!nowItem?.uri}>
+                  +ToList
                 </button>
 
                 <div className={`viz ${isPlaying ? "on" : ""}`} title="Equalizer">
-                  <span /><span /><span /><span /><span /><span /><span /><span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
                 </div>
               </div>
             </div>
@@ -450,11 +582,24 @@ export default function App() {
             </div>
           </div>
 
-          {/* ✅ NEW ORDER */}
-          {/* 1) Recently Played + 2) Queue/Jam */}
+          {/* ORDER: Recently Played + Queue/Jam */}
           <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
-              <h2>Recently Played</h2>
+              <div className="cardHead">
+                <h2 style={{ margin: 0 }}>Recently Played</h2>
+                <select
+                  value={recentsFilter}
+                  onChange={(e) => setRecentsFilter(e.target.value)}
+                  title="Filter recents"
+                >
+                  {RECENTS_FILTERS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <ul className="list">
                 {recentsView.map((r, i) => {
                   const t = r?.track;
@@ -472,7 +617,8 @@ export default function App() {
                   );
                 })}
               </ul>
-              {recentlyPlayed.length > PAGE_SIZE && (
+
+              {filteredRecents.length > PAGE_SIZE && (
                 <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
                   {expandRecents ? "Less" : "More"}
                 </button>
@@ -511,7 +657,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3) Playlists + 4) Playlist Tracks */}
+          {/* ORDER: Playlists + Playlist Tracks */}
           <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
               <h2>Playlists</h2>
@@ -532,9 +678,7 @@ export default function App() {
                     >
                       <CoverThumb url={cover} alt="" />
                       <div className="rowMeta">
-                        <div className="rowTitle">
-                          <ExternalLink href={p?.external_urls?.spotify}>{p.name}</ExternalLink>
-                        </div>
+                        <div className="rowTitle">{p.name}</div>
                         <div className="muted">{p?.tracks?.total ?? 0} tracks</div>
                       </div>
                     </li>
@@ -549,7 +693,9 @@ export default function App() {
             </div>
 
             <div className="card">
-              <h2>Playlist Tracks {selectedPlaylist?.name ? <span className="muted">— {selectedPlaylist.name}</span> : ""}</h2>
+              <h2>
+                Playlist Tracks {selectedPlaylist?.name ? <span className="muted">— {selectedPlaylist.name}</span> : ""}
+              </h2>
               {!selectedPlaylist ? (
                 <div className="muted">Pick a playlist to load its tracks.</div>
               ) : (
@@ -582,10 +728,29 @@ export default function App() {
             </div>
           </div>
 
-          {/* 5) Top Artists + 6) Top Tracks */}
+          {/* ORDER: Top Artists + Top Tracks */}
           <div className="grid" style={{ marginTop: 14 }}>
             <div className="card">
-              <h2>Top Artists</h2>
+              <div className="cardHead">
+                <h2 style={{ margin: 0 }}>Top Artists</h2>
+                <select
+                  value={topArtistsRange}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    setTopArtistsRange(v);
+                    setExpandTopArtists(false);
+                    await loadTopArtists(v);
+                  }}
+                  title="Time range"
+                >
+                  {RANGE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <ul className="list">
                 {topArtistsView.map((a) => {
                   const img = a?.images?.[2]?.url || a?.images?.[1]?.url || a?.images?.[0]?.url;
@@ -602,6 +767,7 @@ export default function App() {
                   );
                 })}
               </ul>
+
               {topArtists.length > PAGE_SIZE && (
                 <button className="btn ghost moreBtn" onClick={() => setExpandTopArtists((v) => !v)}>
                   {expandTopArtists ? "Less" : "More"}
@@ -610,7 +776,26 @@ export default function App() {
             </div>
 
             <div className="card">
-              <h2>Top Tracks</h2>
+              <div className="cardHead">
+                <h2 style={{ margin: 0 }}>Top Tracks</h2>
+                <select
+                  value={topTracksRange}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    setTopTracksRange(v);
+                    setExpandTopTracks(false);
+                    await loadTopTracks(v);
+                  }}
+                  title="Time range"
+                >
+                  {RANGE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <ul className="list">
                 {topTracksView.map((t) => {
                   const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
@@ -627,6 +812,7 @@ export default function App() {
                   );
                 })}
               </ul>
+
               {topTracks.length > PAGE_SIZE && (
                 <button className="btn ghost moreBtn" onClick={() => setExpandTopTracks((v) => !v)}>
                   {expandTopTracks ? "Less" : "More"}
