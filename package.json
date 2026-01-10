@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "progress": "^2.0.3",
+    "terminal-menu": "^2.1.1"
+  }
+}

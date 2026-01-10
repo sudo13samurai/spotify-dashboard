@@ -25,7 +25,7 @@ async function jmut(method, path, body = null) {
     cache: "no-store",
     headers: {
       ...(body ? { "Content-Type": "application/json" } : {}),
-      "Cache-Control": "no-cache"
+                          "Cache-Control": "no-cache"
     },
     body: body ? JSON.stringify(body) : undefined
   });
@@ -45,7 +45,7 @@ function ExternalLink({ href, children }) {
   if (!href) return <span>{children}</span>;
   return (
     <a className="link" href={href} target="_blank" rel="noreferrer">
-      {children}
+    {children}
     </a>
   );
 }
@@ -57,28 +57,129 @@ function CoverThumb({ url, alt = "" }) {
 
 function NowCoverWithBars({ coverUrl, isPlaying }) {
   return (
-    <div className="nowCoverWrap">
-      <div className={`bgBars ${isPlaying ? "on" : ""}`} aria-hidden="true">
-        {Array.from({ length: 18 }).map((_, i) => (
-          <span key={i} />
-        ))}
-      </div>
-      <CoverThumb url={coverUrl} alt="Now playing cover" />
+    <div className={`nowCoverWrap ${isPlaying ? "playing" : ""}`}>
+    <div className={`bgBars ${isPlaying ? "on" : ""}`} aria-hidden="true">
+    {Array.from({ length: 18 }).map((_, i) => (
+      <span key={i} />
+    ))}
+    </div>
+    <CoverThumb url={coverUrl} alt="Now playing cover" />
     </div>
   );
+}
+
+/**
+ * Tiny waveform canvas (visual flavor)
+ * - animates only when playing
+ * - uses CSS var --accent for stroke/fill “feel”
+ */
+function MiniWaveform({ isPlaying, seed = 0 }) {
+  const ref = useRef(null);
+  const rafRef = useRef(null);
+  const tRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    function draw() {
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      ctx.clearRect(0, 0, w, h);
+
+      // background soft lines
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let y = 10; y < h; y += 12) {
+        ctx.moveTo(10, y);
+        ctx.lineTo(w - 10, y);
+      }
+      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.stroke();
+
+      // bars
+      const bars = 42;
+      const gap = 4;
+      const barW = Math.max(2, (w - 20 - gap * (bars - 1)) / bars);
+      const baseX = 10;
+
+      // a gentle time driver; stops moving when paused (but still renders)
+      if (isPlaying) tRef.current += 0.03;
+      const t = tRef.current + (seed % 1000) * 0.001;
+
+      ctx.globalAlpha = 0.95;
+
+      // Use CSS var --accent by reading computed style once per frame
+      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent")?.trim() || "#1db954";
+      const accent2 = getComputedStyle(document.documentElement).getPropertyValue("--accent2")?.trim() || "rgba(29,185,84,0.55)";
+
+      for (let i = 0; i < bars; i++) {
+        const phase = i * 0.25 + t;
+        const s1 = Math.sin(phase * 1.6);
+        const s2 = Math.sin(phase * 0.7 + 1.2);
+        const amp = isPlaying ? (0.55 + 0.45 * (0.5 + 0.5 * s2)) : 0.22;
+
+        const barH = Math.max(6, (h - 16) * (0.12 + 0.88 * (0.5 + 0.5 * s1) * amp));
+        const x = baseX + i * (barW + gap);
+        const y = (h - 8) - barH;
+
+        const r = 6;
+        ctx.fillStyle = i % 3 === 0 ? accent : accent2;
+        roundRect(ctx, x, y, barW, barH, r);
+        ctx.fill();
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    rafRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
+  }, [isPlaying, seed]);
+
+  return <canvas className="waveCanvas" ref={ref} />;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
 
 // Spotify uses: short_term (≈4w), medium_term (≈6m), long_term (all time)
 const RANGE_OPTIONS = [
   { label: "30 days", value: "short_term" },
-  { label: "6 months", value: "medium_term" },
-  { label: "All time", value: "long_term" }
+{ label: "6 months", value: "medium_term" },
+{ label: "All time", value: "long_term" }
 ];
 
 const RECENTS_FILTERS = [
   { label: "24 hours", value: "24h" },
-  { label: "3 days", value: "3d" },
-  { label: "30 days", value: "30d" }
+{ label: "3 days", value: "3d" },
+{ label: "30 days", value: "30d" }
 ];
 
 function cutoffDate(key) {
@@ -86,6 +187,101 @@ function cutoffDate(key) {
   if (key === "24h") return new Date(now - 24 * 60 * 60 * 1000);
   if (key === "3d") return new Date(now - 3 * 24 * 60 * 60 * 1000);
   return new Date(now - 30 * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Extract a “dominant” color from an image URL using canvas.
+ * Note: Works best if the image allows CORS. Spotify images usually do.
+ * If CORS fails, we fall back to Spotify green.
+ */
+async function extractDominantColor(imageUrl) {
+  const fallback = { accent: "#1db954", accent2: "rgba(29,185,84,0.55)", accent3: "rgba(29,185,84,0.20)" };
+  if (!imageUrl) return fallback;
+
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.src = imageUrl;
+
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    const size = 48;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+
+    // Average pixels, skipping super dark/transparent to avoid muddy accents
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a < 200) continue;
+
+      const pr = data[i];
+      const pg = data[i + 1];
+      const pb = data[i + 2];
+
+      const lum = 0.2126 * pr + 0.7152 * pg + 0.0722 * pb;
+      if (lum < 18) continue; // too dark
+      r += pr; g += pg; b += pb; n++;
+    }
+
+    if (!n) return fallback;
+
+    r = Math.round(r / n);
+    g = Math.round(g / n);
+    b = Math.round(b / n);
+
+    // Boost saturation slightly so it “pops” on dark UI
+    const boosted = boostSaturation({ r, g, b }, 1.15);
+
+    const accent = rgbToHex(boosted.r, boosted.g, boosted.b);
+    const accent2 = `rgba(${boosted.r},${boosted.g},${boosted.b},0.55)`;
+    const accent3 = `rgba(${boosted.r},${boosted.g},${boosted.b},0.20)`;
+
+    return { accent, accent2, accent3 };
+  } catch {
+    return fallback;
+  }
+}
+
+function rgbToHex(r, g, b) {
+  const to = (x) => x.toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+function boostSaturation({ r, g, b }, factor = 1.1) {
+  // convert to HSL-ish via simple method
+  const rf = r / 255, gf = g / 255, bf = b / 255;
+  const max = Math.max(rf, gf, bf), min = Math.min(rf, gf, bf);
+  const l = (max + min) / 2;
+
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  }
+
+  // If already low sat, don’t overboost into grey mud
+  const target = Math.min(1, s * factor + 0.08);
+
+  // mix with grayscale by saturation ratio
+  const gray = l;
+  const mix = (c) => gray + (c - gray) * (target / (s || 0.001));
+
+  const nr = Math.max(0, Math.min(1, mix(rf)));
+  const ng = Math.max(0, Math.min(1, mix(gf)));
+  const nb = Math.max(0, Math.min(1, mix(bf)));
+
+  return { r: Math.round(nr * 255), g: Math.round(ng * 255), b: Math.round(nb * 255) };
 }
 
 export default function App() {
@@ -120,13 +316,23 @@ export default function App() {
   const [expandRecents, setExpandRecents] = useState(false);
   const [expandPlaylists, setExpandPlaylists] = useState(false);
 
-  // NEW: dropdown state
+  // dropdown state
   const [topArtistsRange, setTopArtistsRange] = useState("short_term");
   const [topTracksRange, setTopTracksRange] = useState("short_term");
   const [recentsFilter, setRecentsFilter] = useState("3d");
 
-  // NEW: playlist actions state
+  // playlist actions state
   const [playlistTargetId, setPlaylistTargetId] = useState("");
+
+  // Vibe toggle (persisted)
+  const [vibeMode, setVibeMode] = useState(() => {
+    try {
+      const v = localStorage.getItem("spotify_dash_vibe_mode");
+      return v ? v === "1" : true;
+    } catch {
+      return true;
+    }
+  });
 
   const loginUrl = useMemo(() => `${SERVER_BASE}/auth/login`, []);
   const logoutUrl = useMemo(() => `${SERVER_BASE}/auth/logout`, []);
@@ -140,7 +346,9 @@ export default function App() {
   const nowArtists = nowItem?.artists ?? [];
   const nowUrl = nowItem?.external_urls?.spotify ?? null;
   const nowCover =
-    nowItem?.album?.images?.[0]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[2]?.url || null;
+  nowItem?.album?.images?.[0]?.url || nowItem?.album?.images?.[1]?.url || nowItem?.album?.images?.[2]?.url || null;
+
+  const nowId = nowItem?.id || "none";
 
   async function refreshStatus() {
     const out = await jget("/auth/status");
@@ -232,10 +440,10 @@ export default function App() {
 
       await Promise.all([
         loadTopArtists(topArtistsRange),
-        loadTopTracks(topTracksRange),
-        loadRecents(),
-        syncPlayer(),
-        loadQueue()
+                        loadTopTracks(topTracksRange),
+                        loadRecents(),
+                        syncPlayer(),
+                        loadQueue()
       ]);
     } finally {
       setLoading(false);
@@ -258,7 +466,7 @@ export default function App() {
     setPlaylistTracks([]);
   }
 
-  // Controls (fixed methods)
+  // Controls
   async function playPause() {
     setMsg("");
     const out = isPlaying ? await jmut("PUT", "/api/player/pause") : await jmut("PUT", "/api/player/play");
@@ -310,7 +518,7 @@ export default function App() {
     setTimeout(syncPlayer, 800);
   }
 
-  // NEW: Add to Queue
+  // Add to Queue
   async function addNowToQueue() {
     const uri = nowItem?.uri;
     if (!uri) return;
@@ -320,7 +528,7 @@ export default function App() {
     setTimeout(loadQueue, 700);
   }
 
-  // NEW: Start radio from current track
+  // Start radio from current track
   async function startRadioFromNow() {
     const id = nowItem?.id;
     if (!id) return;
@@ -333,7 +541,7 @@ export default function App() {
     }, 800);
   }
 
-  // NEW: Create playlist from current track
+  // Create playlist from current track
   async function createPlaylistFromNow() {
     const uri = nowItem?.uri;
     if (!uri) return;
@@ -370,7 +578,7 @@ export default function App() {
     });
   }
 
-  // NEW: Add current track to selected playlist
+  // Add current track to selected playlist
   async function addNowToPlaylist() {
     const uri = nowItem?.uri;
     if (!uri) return;
@@ -390,447 +598,497 @@ export default function App() {
     if (authed) loadAll();
   }, [authed]);
 
-  useEffect(() => {
-    if (!authed) return;
-    const id = setInterval(() => {
-      syncPlayer();
-      loadQueue();
-    }, 7000);
-    return () => clearInterval(id);
-  }, [authed]);
+    useEffect(() => {
+      if (!authed) return;
+      const id = setInterval(() => {
+        syncPlayer();
+        loadQueue();
+      }, 7000);
+      return () => clearInterval(id);
+    }, [authed]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!player?.item) return;
-      if (seekingRef.current) return;
-      if (!player?.is_playing) return;
-      setProgressMs((p) => Math.min(p + 1000, durationMs || p + 1000));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [player, durationMs]);
+    useEffect(() => {
+      const id = setInterval(() => {
+        if (!player?.item) return;
+        if (seekingRef.current) return;
+        if (!player?.is_playing) return;
+        setProgressMs((p) => Math.min(p + 1000, durationMs || p + 1000));
+      }, 1000);
+      return () => clearInterval(id);
+    }, [player, durationMs]);
 
-  // Views + filtering
-  const cutoff = cutoffDate(recentsFilter);
-  const filteredRecents = (recentlyPlayed || []).filter((r) => {
-    const ts = r?.played_at ? new Date(r.played_at) : null;
-    return ts ? ts >= cutoff : true;
-  });
+    // Vibe mode class + persistence
+    useEffect(() => {
+      document.body.classList.toggle("vibe", vibeMode);
+      try {
+        localStorage.setItem("spotify_dash_vibe_mode", vibeMode ? "1" : "0");
+      } catch {
+        // ignore
+      }
+    }, [vibeMode]);
 
-  const recentsView = (expandRecents ? filteredRecents : filteredRecents.slice(0, PAGE_SIZE)) || [];
-  const topArtistsView = (expandTopArtists ? topArtists : topArtists.slice(0, PAGE_SIZE)) || [];
-  const topTracksView = (expandTopTracks ? topTracks : topTracks.slice(0, PAGE_SIZE)) || [];
-  const playlistsView = (expandPlaylists ? playlists : playlists.slice(0, PAGE_SIZE)) || [];
-  const queueView = (expandQueue ? queueItems : queueItems.slice(0, PAGE_SIZE)) || [];
-  const playlistTracksView = (expandPlaylistTracks ? playlistTracks : playlistTracks.slice(0, PAGE_SIZE)) || [];
+    // Paused/playing body class for “state-aware” dimming
+    useEffect(() => {
+      document.body.classList.toggle("paused", authed && !isPlaying);
+    }, [authed, isPlaying]);
 
-  return (
-    <div className="page">
+    // Dynamic accent colors + ambient bg from album art
+    useEffect(() => {
+      let cancelled = false;
+
+      (async () => {
+        // Set background image var regardless (nice even in clean mode if you flip vibe on)
+        const root = document.documentElement;
+        root.style.setProperty("--bg-art-url", nowCover ? `url("${nowCover}")` : "none");
+
+        const { accent, accent2, accent3 } = await extractDominantColor(nowCover);
+        if (cancelled) return;
+
+        root.style.setProperty("--accent", accent);
+        root.style.setProperty("--accent2", accent2);
+        root.style.setProperty("--accent3", accent3);
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [nowCover]);
+
+    // Views + filtering
+    const cutoff = cutoffDate(recentsFilter);
+    const filteredRecents = (recentlyPlayed || []).filter((r) => {
+      const ts = r?.played_at ? new Date(r.played_at) : null;
+      return ts ? ts >= cutoff : true;
+    });
+
+    const recentsView = (expandRecents ? filteredRecents : filteredRecents.slice(0, PAGE_SIZE)) || [];
+    const topArtistsView = (expandTopArtists ? topArtists : topArtists.slice(0, PAGE_SIZE)) || [];
+    const topTracksView = (expandTopTracks ? topTracks : topTracks.slice(0, PAGE_SIZE)) || [];
+    const playlistsView = (expandPlaylists ? playlists : playlists.slice(0, PAGE_SIZE)) || [];
+    const queueView = (expandQueue ? queueItems : queueItems.slice(0, PAGE_SIZE)) || [];
+    const playlistTracksView = (expandPlaylistTracks ? playlistTracks : playlistTracks.slice(0, PAGE_SIZE)) || [];
+
+    return (
+      <div className="page">
       <header className="header">
-        <div className="title headerBrand">
-          <a
-            className="brandAvatarLink"
-            href={me?.external_urls?.spotify || "https://open.spotify.com"}
-            target="_blank"
-            rel="noreferrer"
-            title={me?.display_name ? `Open ${me.display_name} on Spotify` : "Open Spotify"}
-          >
-            {me?.images?.[0]?.url ? (
-              <img className="brandAvatar" src={me.images[0].url} alt={me.display_name || "Profile"} />
-            ) : (
-              <div className="brandAvatar brandAvatarFallback" aria-hidden="true" />
-            )}
-          </a>
+      <div className="title headerBrand">
+      <a
+      className="brandAvatarLink"
+      href={me?.external_urls?.spotify || "https://open.spotify.com"}
+      target="_blank"
+      rel="noreferrer"
+      title={me?.display_name ? `Open ${me.display_name} on Spotify` : "Open Spotify"}
+      >
+      {me?.images?.[0]?.url ? (
+        <img className="brandAvatar" src={me.images[0].url} alt={me.display_name || "Profile"} />
+      ) : (
+        <div className="brandAvatar brandAvatarFallback" aria-hidden="true" />
+      )}
+      </a>
 
-          <div className="brandText">
-            <h1 style={{ margin: 0 }}>Spotify Dashboard</h1>
-            <p className="sub" style={{ margin: 0 }}>
-              Powered by{" "}
-              <a className="link" href="https://tildeath.site" target="_blank" rel="noreferrer">
-                tildeath.site
-              </a>
-            </p>
-          </div>
-        </div>
+      <div className="brandText">
+      <h1 style={{ margin: 0 }}>Spotify Dashboard</h1>
+      <p className="sub" style={{ margin: 0 }}>
+      Powered by{" "}
+      <a className="link" href="https://tildeath.site" target="_blank" rel="noreferrer">
+      tildeath.site
+      </a>
+      </p>
+      </div>
+      </div>
 
-        <div className="actions">
-          {!authed ? (
-            <a className="btn primary" href={loginUrl}>
-              Connect Spotify
-            </a>
-          ) : (
-            <>
-              <button className="btn ghost" onClick={loadAll} disabled={loading}>
-                Refresh
-              </button>
-              <button className="btn danger" onClick={logout}>
-                Logout
-              </button>
-            </>
-          )}
-        </div>
+      <div className="actions">
+      {!authed ? (
+        <a className="btn primary" href={loginUrl}>
+        Connect Spotify
+        </a>
+      ) : (
+        <>
+        <button className="btn accent" onClick={() => setVibeMode((v) => !v)} title="Toggle vibe mode">
+        {vibeMode ? "Vibe: On" : "Vibe: Off"}
+        </button>
+        <button className="btn ghost" onClick={loadAll} disabled={loading}>
+        Refresh
+        </button>
+        <button className="btn danger" onClick={logout}>
+        Logout
+        </button>
+        </>
+      )}
+      </div>
       </header>
 
       {!!msg && (
         <div className="card" style={{ minHeight: "unset", marginBottom: 14 }}>
-          <div className="muted">{msg}</div>
+        <div className="muted">{msg}</div>
         </div>
       )}
 
       {!authed ? (
         <div className="card" style={{ minHeight: "unset" }}>
-          <h2>Not connected</h2>
-          <p>
-            Click <b>Connect Spotify</b> to authorize.
-          </p>
+        <h2>Not connected</h2>
+        <p>
+        Click <b>Connect Spotify</b> to authorize.
+        </p>
         </div>
       ) : (
         <>
-          {/* Player */}
-          <div className="card playerCard">
-            <div className="playerRow">
-              <div className="playerLeft">
-                <NowCoverWithBars coverUrl={nowCover} isPlaying={isPlaying} />
-                <div className="playerMeta">
-                  <div className="rowTitle">
-                    {nowItem ? <ExternalLink href={nowUrl}>{nowTitle}</ExternalLink> : <span className="muted">Nothing playing</span>}
-                  </div>
-                  {!!nowItem && (
-                    <div className="muted">
-                      {nowArtists.map((a, i) => (
-                        <span key={a.id || i}>
-                          <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
-                          {i < nowArtists.length - 1 ? ", " : ""}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="muted">
-                    {msToTime(progressMs)} / {msToTime(durationMs)}
-                  </div>
-                </div>
-              </div>
+        {/* Player */}
+        <div className={`card playerCard fadeIn`} key={`player-${nowId}`}>
+        <div className="playerRow">
+        <div className="playerLeft">
+        <NowCoverWithBars coverUrl={nowCover} isPlaying={isPlaying} />
+        <div className="playerMeta">
+        <div className="rowTitle">
+        {nowItem ? (
+          <ExternalLink href={nowUrl}>{nowTitle}</ExternalLink>
+        ) : (
+          <span className="muted">Nothing playing</span>
+        )}
+        </div>
 
-              <div className="playerControls">
-                <button className="btn ghost" onClick={prevTrack} title="Previous">
-                  ◀◀
-                </button>
-                <button className="btn ghost" onClick={playPause} title={isPlaying ? "Pause" : "Play"}>
-                  {isPlaying ? "Pause" : "Play"}
-                </button>
-                <button className="btn ghost" onClick={nextTrack} title="Next">
-                  ▶▶
-                </button>
-                <button className="btn ghost" onClick={toggleShuffle} title="Shuffle">
-                  {shuffleOn ? "Shuf✓" : "Shuf"}
-                </button>
-                <button className="btn ghost" onClick={cycleRepeat} title="Repeat">
-                  Rep:{repeatState === "context" ? "C" : repeatState === "track" ? "1" : "Off"}
-                </button>
-
-                <button className="btn ghost" onClick={addNowToQueue} title="Add current track to queue" disabled={!nowItem?.uri}>
-                  +Queue
-                </button>
-                <button className="btn ghost" onClick={startRadioFromNow} title="Start a radio from this track" disabled={!nowItem?.id}>
-                  Radio
-                </button>
-
-                <button className="btn ghost" onClick={createPlaylistFromNow} title="Create a playlist from current track" disabled={!nowItem?.uri}>
-                  +NewList
-                </button>
-
-                <select
-                  value={playlistTargetId}
-                  onChange={(e) => setPlaylistTargetId(e.target.value)}
-                  title="Pick playlist to add current track"
-                  style={{ maxWidth: 220 }}
-                >
-                  {(playlists || []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <button className="btn ghost" onClick={addNowToPlaylist} title="Add current track to selected playlist" disabled={!nowItem?.uri}>
-                  +ToList
-                </button>
-
-                <div className={`viz ${isPlaying ? "on" : ""}`} title="Equalizer">
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-            </div>
-
-            <div className="deviceRow">
-              <select value={targetDeviceId} onChange={(e) => setTargetDeviceId(e.target.value)} style={{ flex: 1 }}>
-                <option value="">Select a device…</option>
-                {devices.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} {d.is_active ? "(active)" : ""}
-                  </option>
-                ))}
-              </select>
-              <button className="btn ghost" onClick={transferDevice}>
-                Transfer
-              </button>
-            </div>
+        {!!nowItem && (
+          <div className="muted">
+          {nowArtists.map((a, i) => (
+            <span key={a.id || i}>
+            <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
+            {i < nowArtists.length - 1 ? ", " : ""}
+            </span>
+          ))}
           </div>
+        )}
 
-          {/* ORDER: Recently Played + Queue/Jam */}
-          <div className="grid" style={{ marginTop: 14 }}>
-            <div className="card">
-              <div className="cardHead">
-                <h2 style={{ margin: 0 }}>Recently Played</h2>
-                <select
-                  value={recentsFilter}
-                  onChange={(e) => setRecentsFilter(e.target.value)}
-                  title="Filter recents"
-                >
-                  {RECENTS_FILTERS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+        <div className="muted">
+        {msToTime(progressMs)} / {msToTime(durationMs)}
+        </div>
+
+        <div className="waveWrap">
+        <MiniWaveform isPlaying={isPlaying} seed={nowId.length} />
+        </div>
+        </div>
+        </div>
+
+        <div className="playerControls">
+        <button className="btn ghost" onClick={prevTrack} title="Previous">
+        ◀◀
+        </button>
+        <button className="btn ghost" onClick={playPause} title={isPlaying ? "Pause" : "Play"}>
+        {isPlaying ? "Pause" : "Play"}
+        </button>
+        <button className="btn ghost" onClick={nextTrack} title="Next">
+        ▶▶
+        </button>
+        <button className="btn ghost" onClick={toggleShuffle} title="Shuffle">
+        {shuffleOn ? "Shuf✓" : "Shuf"}
+        </button>
+        <button className="btn ghost" onClick={cycleRepeat} title="Repeat">
+        Rep:{repeatState === "context" ? "C" : repeatState === "track" ? "1" : "Off"}
+        </button>
+
+        <button className="btn ghost" onClick={addNowToQueue} title="Add current track to queue" disabled={!nowItem?.uri}>
+        +Queue
+        </button>
+        <button className="btn ghost" onClick={startRadioFromNow} title="Start a radio from this track" disabled={!nowItem?.id}>
+        Radio
+        </button>
+
+        <button className="btn ghost" onClick={createPlaylistFromNow} title="Create a playlist from current track" disabled={!nowItem?.uri}>
+        +NewList
+        </button>
+
+        <select
+        value={playlistTargetId}
+        onChange={(e) => setPlaylistTargetId(e.target.value)}
+        title="Pick playlist to add current track"
+        style={{ maxWidth: 220 }}
+        >
+        {(playlists || []).map((p) => (
+          <option key={p.id} value={p.id}>
+          {p.name}
+          </option>
+        ))}
+        </select>
+
+        <button className="btn ghost" onClick={addNowToPlaylist} title="Add current track to selected playlist" disabled={!nowItem?.uri}>
+        +ToList
+        </button>
+
+        <div className={`viz ${isPlaying ? "on" : ""}`} title="Equalizer">
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+        </div>
+        </div>
+        </div>
+
+        <div className="deviceRow">
+        <select value={targetDeviceId} onChange={(e) => setTargetDeviceId(e.target.value)} style={{ flex: 1 }}>
+        <option value="">Select a device…</option>
+        {devices.map((d) => (
+          <option key={d.id} value={d.id}>
+          {d.name} {d.is_active ? "(active)" : ""}
+          </option>
+        ))}
+        </select>
+        <button className="btn ghost" onClick={transferDevice}>
+        Transfer
+        </button>
+        </div>
+        </div>
+
+        {/* ORDER: Recently Played + Queue/Jam */}
+        <div className="grid" style={{ marginTop: 14 }}>
+        <div className="card">
+        <div className="cardHead">
+        <h2 style={{ margin: 0 }}>Recently Played</h2>
+        <select value={recentsFilter} onChange={(e) => setRecentsFilter(e.target.value)} title="Filter recents">
+        {RECENTS_FILTERS.map((o) => (
+          <option key={o.value} value={o.value}>
+          {o.label}
+          </option>
+        ))}
+        </select>
+        </div>
+
+        <ul className="list">
+        {recentsView.map((r, i) => {
+          const t = r?.track;
+          const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+          const active = t?.id && nowItem?.id && t.id === nowItem.id;
+          return (
+            <li className={`row ${active ? "active" : ""}`} key={`${t?.id || i}`}>
+            <CoverThumb url={cover} alt="" />
+            <div className="rowMeta">
+            <div className="rowTitle">
+            <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
+            </div>
+            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
+            </div>
+            </li>
+          );
+        })}
+        </ul>
+
+        {filteredRecents.length > PAGE_SIZE && (
+          <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
+          {expandRecents ? "Less" : "More"}
+          </button>
+        )}
+        </div>
+
+        <div className="card">
+        <h2>Queue / Jam</h2>
+        {queueItems.length === 0 ? (
+          <div className="muted">Queue is empty.</div>
+        ) : (
+          <>
+          <ul className="list">
+          {queueView.map((t, i) => {
+            const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+            const active = t?.id && nowItem?.id && t.id === nowItem.id;
+            return (
+              <li className={`row ${active ? "active" : ""}`} key={t?.id || `q-${i}`}>
+              <CoverThumb url={cover} alt="" />
+              <div className="rowMeta">
+              <div className="rowTitle">
+              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
               </div>
-
-              <ul className="list">
-                {recentsView.map((r, i) => {
-                  const t = r?.track;
-                  const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                  return (
-                    <li className="row" key={`${t?.id || i}`}>
-                      <CoverThumb url={cover} alt="" />
-                      <div className="rowMeta">
-                        <div className="rowTitle">
-                          <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
-                        </div>
-                        <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {filteredRecents.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandRecents((v) => !v)}>
-                  {expandRecents ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            <div className="card">
-              <h2>Queue / Jam</h2>
-              {queueItems.length === 0 ? (
-                <div className="muted">Queue is empty.</div>
-              ) : (
-                <>
-                  <ul className="list">
-                    {queueView.map((t, i) => {
-                      const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                      return (
-                        <li className="row" key={t?.id || `q-${i}`}>
-                          <CoverThumb url={cover} alt="" />
-                          <div className="rowMeta">
-                            <div className="rowTitle">
-                              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
-                            </div>
-                            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {queueItems.length > PAGE_SIZE && (
-                    <button className="btn ghost moreBtn" onClick={() => setExpandQueue((v) => !v)}>
-                      {expandQueue ? "Less" : "More"}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ORDER: Playlists + Playlist Tracks */}
-          <div className="grid" style={{ marginTop: 14 }}>
-            <div className="card">
-              <h2>Playlists</h2>
-              <ul className="list">
-                {playlistsView.map((p) => {
-                  const cover = p?.images?.[2]?.url || p?.images?.[1]?.url || p?.images?.[0]?.url;
-                  const isActive = selectedPlaylist?.id === p.id;
-                  return (
-                    <li
-                      className="row"
-                      key={p.id}
-                      style={{ cursor: "pointer", outline: isActive ? "2px solid rgba(29,185,84,0.65)" : "none" }}
-                      onClick={() => {
-                        setSelectedPlaylist(p);
-                        fetchPlaylistTracks(p.id);
-                      }}
-                      title="Load tracks"
-                    >
-                      <CoverThumb url={cover} alt="" />
-                      <div className="rowMeta">
-                        <div className="rowTitle">{p.name}</div>
-                        <div className="muted">{p?.tracks?.total ?? 0} tracks</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              {playlists.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandPlaylists((v) => !v)}>
-                  {expandPlaylists ? "Less" : "More"}
-                </button>
-              )}
-            </div>
-
-            <div className="card">
-              <h2>
-                Playlist Tracks {selectedPlaylist?.name ? <span className="muted">— {selectedPlaylist.name}</span> : ""}
-              </h2>
-              {!selectedPlaylist ? (
-                <div className="muted">Pick a playlist to load its tracks.</div>
-              ) : (
-                <>
-                  <ul className="list">
-                    {playlistTracksView.map((it, i) => {
-                      const t = it?.track || it;
-                      const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                      return (
-                        <li className="row" key={t?.id || `${selectedPlaylist.id}-${i}`}>
-                          <CoverThumb url={cover} alt="" />
-                          <div className="rowMeta">
-                            <div className="rowTitle">
-                              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
-                            </div>
-                            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-
-                  {playlistTracks.length > PAGE_SIZE && (
-                    <button className="btn ghost moreBtn" onClick={() => setExpandPlaylistTracks((v) => !v)}>
-                      {expandPlaylistTracks ? "Less" : "More"}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ORDER: Top Artists + Top Tracks */}
-          <div className="grid" style={{ marginTop: 14 }}>
-            <div className="card">
-              <div className="cardHead">
-                <h2 style={{ margin: 0 }}>Top Artists</h2>
-                <select
-                  value={topArtistsRange}
-                  onChange={async (e) => {
-                    const v = e.target.value;
-                    setTopArtistsRange(v);
-                    setExpandTopArtists(false);
-                    await loadTopArtists(v);
-                  }}
-                  title="Time range"
-                >
-                  {RANGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
               </div>
+              </li>
+            );
+          })}
+          </ul>
+          {queueItems.length > PAGE_SIZE && (
+            <button className="btn ghost moreBtn" onClick={() => setExpandQueue((v) => !v)}>
+            {expandQueue ? "Less" : "More"}
+            </button>
+          )}
+          </>
+        )}
+        </div>
+        </div>
 
-              <ul className="list">
-                {topArtistsView.map((a) => {
-                  const img = a?.images?.[2]?.url || a?.images?.[1]?.url || a?.images?.[0]?.url;
-                  return (
-                    <li className="row" key={a.id}>
-                      <CoverThumb url={img} alt="" />
-                      <div className="rowMeta">
-                        <div className="rowTitle">
-                          <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
-                        </div>
-                        <div className="muted">{a?.genres?.slice(0, 3).join(", ") || "no genres"}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {topArtists.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandTopArtists((v) => !v)}>
-                  {expandTopArtists ? "Less" : "More"}
-                </button>
-              )}
+        {/* ORDER: Playlists + Playlist Tracks */}
+        <div className="grid" style={{ marginTop: 14 }}>
+        <div className="card">
+        <h2>Playlists</h2>
+        <ul className="list">
+        {playlistsView.map((p) => {
+          const cover = p?.images?.[2]?.url || p?.images?.[1]?.url || p?.images?.[0]?.url;
+          const isActive = selectedPlaylist?.id === p.id;
+          return (
+            <li
+            className={`row ${isActive ? "active" : ""}`}
+            key={p.id}
+            style={{ cursor: "pointer" }}
+            onClick={() => {
+              setSelectedPlaylist(p);
+              fetchPlaylistTracks(p.id);
+            }}
+            title="Load tracks"
+            >
+            <CoverThumb url={cover} alt="" />
+            <div className="rowMeta">
+            <div className="rowTitle">{p.name}</div>
+            <div className="muted">{p?.tracks?.total ?? 0} tracks</div>
             </div>
+            </li>
+          );
+        })}
+        </ul>
+        {playlists.length > PAGE_SIZE && (
+          <button className="btn ghost moreBtn" onClick={() => setExpandPlaylists((v) => !v)}>
+          {expandPlaylists ? "Less" : "More"}
+          </button>
+        )}
+        </div>
 
-            <div className="card">
-              <div className="cardHead">
-                <h2 style={{ margin: 0 }}>Top Tracks</h2>
-                <select
-                  value={topTracksRange}
-                  onChange={async (e) => {
-                    const v = e.target.value;
-                    setTopTracksRange(v);
-                    setExpandTopTracks(false);
-                    await loadTopTracks(v);
-                  }}
-                  title="Time range"
-                >
-                  {RANGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+        <div className="card">
+        <h2>
+        Playlist Tracks {selectedPlaylist?.name ? <span className="muted">— {selectedPlaylist.name}</span> : ""}
+        </h2>
+        {!selectedPlaylist ? (
+          <div className="muted">Pick a playlist to load its tracks.</div>
+        ) : (
+          <>
+          <ul className="list">
+          {playlistTracksView.map((it, i) => {
+            const t = it?.track || it;
+            const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+            const active = t?.id && nowItem?.id && t.id === nowItem.id;
+            return (
+              <li className={`row ${active ? "active" : ""}`} key={t?.id || `${selectedPlaylist.id}-${i}`}>
+              <CoverThumb url={cover} alt="" />
+              <div className="rowMeta">
+              <div className="rowTitle">
+              <ExternalLink href={t?.external_urls?.spotify}>{t?.name}</ExternalLink>
               </div>
+              <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
+              </div>
+              </li>
+            );
+          })}
+          </ul>
 
-              <ul className="list">
-                {topTracksView.map((t) => {
-                  const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
-                  return (
-                    <li className="row" key={t.id}>
-                      <CoverThumb url={cover} alt="" />
-                      <div className="rowMeta">
-                        <div className="rowTitle">
-                          <ExternalLink href={t?.external_urls?.spotify}>{t.name}</ExternalLink>
-                        </div>
-                        <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+          {playlistTracks.length > PAGE_SIZE && (
+            <button className="btn ghost moreBtn" onClick={() => setExpandPlaylistTracks((v) => !v)}>
+            {expandPlaylistTracks ? "Less" : "More"}
+            </button>
+          )}
+          </>
+        )}
+        </div>
+        </div>
 
-              {topTracks.length > PAGE_SIZE && (
-                <button className="btn ghost moreBtn" onClick={() => setExpandTopTracks((v) => !v)}>
-                  {expandTopTracks ? "Less" : "More"}
-                </button>
-              )}
+        {/* ORDER: Top Artists + Top Tracks */}
+        <div className="grid" style={{ marginTop: 14 }}>
+        <div className="card">
+        <div className="cardHead">
+        <h2 style={{ margin: 0 }}>Top Artists</h2>
+        <select
+        value={topArtistsRange}
+        onChange={async (e) => {
+          const v = e.target.value;
+          setTopArtistsRange(v);
+          setExpandTopArtists(false);
+          await loadTopArtists(v);
+        }}
+        title="Time range"
+        >
+        {RANGE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+          {o.label}
+          </option>
+        ))}
+        </select>
+        </div>
+
+        <ul className="list">
+        {topArtistsView.map((a) => {
+          const img = a?.images?.[2]?.url || a?.images?.[1]?.url || a?.images?.[0]?.url;
+          return (
+            <li className="row" key={a.id}>
+            <CoverThumb url={img} alt="" />
+            <div className="rowMeta">
+            <div className="rowTitle">
+            <ExternalLink href={a?.external_urls?.spotify}>{a.name}</ExternalLink>
             </div>
-          </div>
+            <div className="muted">{a?.genres?.slice(0, 3).join(", ") || "no genres"}</div>
+            </div>
+            </li>
+          );
+        })}
+        </ul>
+
+        {topArtists.length > PAGE_SIZE && (
+          <button className="btn ghost moreBtn" onClick={() => setExpandTopArtists((v) => !v)}>
+          {expandTopArtists ? "Less" : "More"}
+          </button>
+        )}
+        </div>
+
+        <div className="card">
+        <div className="cardHead">
+        <h2 style={{ margin: 0 }}>Top Tracks</h2>
+        <select
+        value={topTracksRange}
+        onChange={async (e) => {
+          const v = e.target.value;
+          setTopTracksRange(v);
+          setExpandTopTracks(false);
+          await loadTopTracks(v);
+        }}
+        title="Time range"
+        >
+        {RANGE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+          {o.label}
+          </option>
+        ))}
+        </select>
+        </div>
+
+        <ul className="list">
+        {topTracksView.map((t) => {
+          const cover = t?.album?.images?.[2]?.url || t?.album?.images?.[1]?.url || t?.album?.images?.[0]?.url;
+          return (
+            <li className="row" key={t.id}>
+            <CoverThumb url={cover} alt="" />
+            <div className="rowMeta">
+            <div className="rowTitle">
+            <ExternalLink href={t?.external_urls?.spotify}>{t.name}</ExternalLink>
+            </div>
+            <div className="muted">{t?.artists?.map((a) => a.name).join(", ")}</div>
+            </div>
+            </li>
+          );
+        })}
+        </ul>
+
+        {topTracks.length > PAGE_SIZE && (
+          <button className="btn ghost moreBtn" onClick={() => setExpandTopTracks((v) => !v)}>
+          {expandTopTracks ? "Less" : "More"}
+          </button>
+        )}
+        </div>
+        </div>
         </>
       )}
 
       <footer className="footer">
-        <span className="muted" style={{ fontSize: 12 }}>
-          API:{" "}
-          <a className="link" href={SERVER_BASE} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
-            {SERVER_BASE}
-          </a>
-        </span>
+      <span className="muted" style={{ fontSize: 12 }}>
+      API:{" "}
+      <a className="link" href={SERVER_BASE} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+      {SERVER_BASE}
+      </a>
+      </span>
       </footer>
-    </div>
-  );
+      </div>
+    );
 }
