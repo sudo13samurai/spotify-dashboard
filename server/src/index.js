@@ -1,5 +1,3 @@
-// index.js
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -50,10 +48,6 @@ app.set("trust proxy", 1);
 
 /**
  * Sessions (cookie-based)
- * - secure: true because Render is HTTPS
- * - sameSite: "lax" works when frontend & backend share the same site OR you're not doing cross-site cookies
- *   If your frontend is on a DIFFERENT domain than this API, change sameSite to "none" and keep secure: true,
- *   and ensure your client fetch() uses credentials: "include".
  */
 app.use(
   session({
@@ -73,8 +67,6 @@ app.use(
 
 /**
  * CORS
- * If your frontend is on FRONTEND_ORIGIN and API is on this service,
- * this ensures cookies can be sent (credentials: true).
  */
 app.use(
   cors({
@@ -111,8 +103,6 @@ function clearTokens() {
 // ----------------- spotify auth helpers -----------------
 
 function buildAuthUrl() {
-  // NOTE: your original scopes were missing the ones needed for top-* and recently-played.
-  // Without these, Spotify will return 403 on those endpoints even if you have a token.
   const scope = [
     "user-read-playback-state",
     "user-modify-playback-state",
@@ -148,8 +138,8 @@ async function spotifyTokenExchange(code) {
     method: "POST",
     headers: {
       Authorization:
-        "Basic " + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
-      "Content-Type": "application/x-www-form-urlencoded"
+      "Basic " + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
+                          "Content-Type": "application/x-www-form-urlencoded"
     },
     body
   });
@@ -179,8 +169,8 @@ async function getValidAccessToken() {
     method: "POST",
     headers: {
       Authorization:
-        "Basic " + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
-      "Content-Type": "application/x-www-form-urlencoded"
+      "Basic " + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64"),
+                          "Content-Type": "application/x-www-form-urlencoded"
     },
     body
   });
@@ -198,14 +188,23 @@ async function getValidAccessToken() {
   return json.access_token;
 }
 
-async function spotifyApi(req, res, endpoint) {
+/**
+ * Spotify API passthrough helper
+ * Supports custom HTTP methods + JSON body.
+ */
+async function spotifyApi(req, res, endpoint, method = "GET", body = null) {
   try {
     const token = await getValidAccessToken();
     if (!token) return res.status(401).json({ error: "Not authenticated" });
 
     const url = `https://api.spotify.com/v1${endpoint}`;
     const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(body ? { "Content-Type": "application/json" } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
     });
 
     if (r.status === 204) return res.sendStatus(204);
@@ -264,7 +263,7 @@ app.get("/callback", async (req, res) => {
     frontendOrigin: FRONTEND_ORIGIN,
     url: req.originalUrl,
     referer: req.get("referer") || null,
-    state: state ? String(state).slice(0, 6) + "…" : null
+              state: state ? String(state).slice(0, 6) + "…" : null
   });
 
   if (error) return res.status(400).send(`Spotify auth error: ${error}`);
@@ -273,7 +272,7 @@ app.get("/callback", async (req, res) => {
   // prevent double exchange
   if (usedCodes.has(code)) {
     console.warn("⚠️ Duplicate callback code; skipping exchange.");
-    req.session.authed = true; // still mark as authed if we already have tokens
+    req.session.authed = true;
     return res.redirect(FRONTEND_ORIGIN);
   }
   usedCodes.add(code);
@@ -289,7 +288,6 @@ app.get("/callback", async (req, res) => {
       expires_at: Date.now() + exchanged.expires_in * 1000
     });
 
-    // ✅ mark this browser session as authorized
     req.session.authed = true;
 
     console.log("✅ Tokens saved + session authed. Redirecting back to frontend.");
@@ -347,7 +345,6 @@ app.post("/api/player/queue/add", async (req, res) => {
   }
 });
 
-
 // ===== Radio: build a "queue" from a seed track and start playback =====
 // POST /api/player/radio?seed_track_id=TRACK_ID&limit=25
 app.post("/api/player/radio", async (req, res) => {
@@ -388,9 +385,8 @@ app.post("/api/player/radio", async (req, res) => {
   }
 });
 
-
 // ===== Create a playlist for the current user =====
-// POST /api/playlists/create  body: { name: "My Playlist", description?: "", public?: false }
+// POST /api/playlists/create  body: { name, description?, public? }
 app.post("/api/playlists/create", async (req, res) => {
   try {
     const token = await getValidAccessToken();
@@ -399,7 +395,6 @@ app.post("/api/playlists/create", async (req, res) => {
     const { name, description = "", public: isPublic = false } = req.body || {};
     if (!name) return res.status(400).json({ error: "Missing playlist name" });
 
-    // Find user id
     const me = await fetch("https://api.spotify.com/v1/me", {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -432,7 +427,6 @@ app.post("/api/playlists/create", async (req, res) => {
   }
 });
 
-
 // ===== Add track(s) to a playlist =====
 // POST /api/playlists/:playlistId/add   body: { uris: ["spotify:track:..."] }
 app.post("/api/playlists/:playlistId/add", async (req, res) => {
@@ -464,28 +458,28 @@ app.post("/api/playlists/:playlistId/add", async (req, res) => {
   }
 });
 
-
 // ----------------- API ROUTES -----------------
 
-// Apply auth guard to ALL /api routes
+// Apply auth guard to ALL /api routes (keep your session gating)
 app.use("/api", requireAuth);
 
 const passthruQuery = (req) => (req.url.includes("?") ? "?" + req.url.split("?")[1] : "");
 
+// Data
 app.get("/api/player/state", (req, res) => spotifyApi(req, res, "/me/player"));
 app.get("/api/player/devices", (req, res) => spotifyApi(req, res, "/me/player/devices"));
 
 app.get("/api/top-tracks", (req, res) => spotifyApi(req, res, "/me/top/tracks" + passthruQuery(req)));
 app.get("/api/top-artists", (req, res) => spotifyApi(req, res, "/me/top/artists" + passthruQuery(req)));
 app.get("/api/recently-played", (req, res) => spotifyApi(req, res, "/me/player/recently-played" + passthruQuery(req)));
-app.get("/api/player/queue", (req, res) => spotifyApi(req, res, "/me/player/queue"));
 app.get("/api/playlists", (req, res) => spotifyApi(req, res, "/me/playlists" + passthruQuery(req)));
 
+// Playlist tracks
 app.get("/api/playlists/:id/tracks", (req, res) =>
-  spotifyApi(req, res, `/playlists/${req.params.id}/tracks` + passthruQuery(req))
+spotifyApi(req, res, `/playlists/${req.params.id}/tracks` + passthruQuery(req))
 );
 
-// Queue (GET)
+// Queue (GET) — single clean implementation
 app.get("/api/player/queue", async (req, res) => {
   try {
     const token = await getValidAccessToken();
@@ -513,33 +507,6 @@ app.put("/api/like", async (req, res) => {
     const token = await getValidAccessToken();
     if (!token) return res.status(401).json({ error: "Not authenticated" });
 
-    // pass-through query string (ids=...)
-    const qs = req.url.split("?")[1] || "";
-    const url = `https://api.spotify.com/v1/me/tracks${qs ? `?${qs}` : ""}`;
-
-    const r = await fetch(url, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (r.status === 204) return res.sendStatus(204);
-
-    const text = await r.text();
-    if (!r.ok) return res.status(r.status).send(text);
-
-    res.type("json").send(text);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Like failed" });
-  }
-});
-
-
-app.put("/api/like", async (req, res) => {
-  try {
-    const token = await getValidAccessToken();
-    if (!token) return res.status(401).json({ error: "Not authenticated" });
-
     const ids = String(req.query.ids || "").trim();
     if (!ids) return res.status(400).json({ error: "Missing ids" });
 
@@ -549,6 +516,7 @@ app.put("/api/like", async (req, res) => {
     });
 
     if (r.status === 204) return res.sendStatus(204);
+
     const text = await r.text();
     return res.status(r.status).send(text);
   } catch (e) {
@@ -557,17 +525,24 @@ app.put("/api/like", async (req, res) => {
   }
 });
 
-// player controls
+// Player controls (fixed methods)
 app.post("/api/player/next", (req, res) => spotifyApi(req, res, "/me/player/next", "POST"));
 app.post("/api/player/previous", (req, res) => spotifyApi(req, res, "/me/player/previous", "POST"));
 
 app.put("/api/player/play", (req, res) => spotifyApi(req, res, "/me/player/play", "PUT"));
 app.put("/api/player/pause", (req, res) => spotifyApi(req, res, "/me/player/pause", "PUT"));
 
-app.put("/api/player/shuffle", (req, res) => spotifyApi(req, res, "/me/player/shuffle", "PUT"));
-app.put("/api/player/repeat", (req, res) => spotifyApi(req, res, "/me/player/repeat", "PUT"));
+app.put("/api/player/shuffle", (req, res) => spotifyApi(req, res, "/me/player/shuffle" + passthruQuery(req), "PUT"));
+app.put("/api/player/repeat", (req, res) => spotifyApi(req, res, "/me/player/repeat" + passthruQuery(req), "PUT"));
 
-app.put("/api/player/transfer", (req, res) => spotifyApi(req, res, "/me/player", "PUT"));
+// ✅ Seek (for the new seek bar)
+// PUT /api/player/seek?position_ms=12345
+app.put("/api/player/seek", (req, res) => {
+  const qs = passthruQuery(req);
+  return spotifyApi(req, res, "/me/player/seek" + qs, "PUT");
+});
+
+// Transfer device (single implementation)
 app.put("/api/player/transfer", async (req, res) => {
   try {
     const token = await getValidAccessToken();

@@ -785,15 +785,19 @@ body.vibe .waveCanvas {
   0%   { transform: scaleY(0.6); }
   50%  { transform: scaleY(2.2); }
   100% { transform: scaleY(0.7); }
-}
 
-/* Footer */
-.footer {
-  margin-top: 18px;
-  display: flex;
-  justify-content: center;
-  padding: 8px;
-}
+  <footer className="footer">
+  <span className="muted" style={{ fontSize: 12, textAlign: "center" }}>
+  <a className="link" href="https://tildeath.site" target="_blank" rel="noreferrer">
+  https://tildeath.site
+  </a>{" "}
+  {" // "}@krystianjcarnahan 2026{" // "}buy me a{" "}
+  <a className="link" href="https://cash.app/" target="_blank" rel="noreferrer">
+  coffee.
+  </a>
+  </span>
+  </footer>
+
 
 .cardHead {
   display: flex;
