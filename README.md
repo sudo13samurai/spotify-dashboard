@@ -31,7 +31,13 @@ This project allows users to log in with their Spotify account and explore detai
 * HTML / CSS / JavaScript
 * Chart.js (data visualizations)
 
+## Preview
+
+![Dashboard Screenshot](docs/dashboard-preview.png)
+
 ---
+
+
 
 ## Getting Started
 
