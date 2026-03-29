@@ -1,120 +1,138 @@
+# Spotify Dashboard
 
-# Spotify Dashboard (Local) — 127.0.0.1 only
+A personal Spotify analytics dashboard that visualizes listening habits, top artists, favorite tracks, and audio insights using the Spotify Web API.
 
-A local Spotify dashboard that binds strictly to **http://127.0.0.1** (no `localhost`) for both server and client.
+This project allows users to log in with their Spotify account and explore detailed statistics about their music preferences.
+
+---
+![Node](https://img.shields.io/badge/node-%3E%3D18-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Spotify API](https://img.shields.io/badge/API-Spotify-1DB954)
+![Status](https://img.shields.io/badge/status-active-success)
+
 
 ## Features
-- Spotify OAuth (Authorization Code flow)
-- Refresh token + auto token refresh
-- Dashboard widgets:
-  - Now Playing
-  - Player Controls (play/pause, next/prev, volume)
-  - Top Artists
-  - Top Tracks
-  - Recently Played
-  - Playlists (list + view tracks)
+
+* Spotify OAuth authentication
+* View **Top Artists**
+* View **Top Tracks**
+* Listening insights and trends
+* Audio feature visualizations
+* Interactive dashboard UI
+* Personal listening analytics
 
 ---
 
-## Prereqs
-- Node.js 18+ (Node 20+ recommended)
-- Spotify account
-- Spotify Developer app
+## Tech Stack
+
+* Node.js
+* Express.js
+* Spotify Web API
+* HTML / CSS / JavaScript
+* Chart.js (data visualizations)
 
 ---
 
-## 1) Create Spotify Developer App
-1. Create an app in the Spotify Developer Dashboard
-2. In app settings, add Redirect URI:
+## Getting Started
 
-   `http://127.0.0.1:8888/callback`
-
-3. Save.
-
----
-
-## 2) Configure env
-Create `server/.env` from the example:
+### 1. Clone the repository
 
 ```bash
-cp server/.env.example server/.env
-nano server/.env
+git clone https://github.com/sudo13samurai/spotify-dashboard.git
+cd spotify-dashboard
+```
 
+### 2. Install dependencies
 
-Set:
-
-SPOTIFY_CLIENT_ID
-
-SPOTIFY_CLIENT_SECRET
-
-Keep:
-
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
-
-FRONTEND_ORIGIN=http://127.0.0.1:5173
-
-3) Install dependencies
-cd server
+```bash
 npm install
+```
 
-cd ../client
-npm install
+### 3. Create a Spotify Developer App
 
-4) Run locally (two terminals)
-Terminal A — Server
-cd server
-npm run dev
+Visit:
 
+https://developer.spotify.com/dashboard
 
-Server:
+Create an application and copy your:
 
-http://127.0.0.1:8888
+* Client ID
+* Client Secret
+* Redirect URI
 
-Terminal B — Client
-cd client
-npm run dev
+---
 
+### 4. Create `.env`
 
-Client:
+Create a `.env` file in the project root:
 
-http://127.0.0.1:5173
+```env
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+PORT=3000
+```
 
-5) Login
+---
 
-Open:
+### 5. Run the application
 
-http://127.0.0.1:5173
+```bash
+npm start
+```
 
-Click Connect Spotify and authorize.
+Then open:
 
-Tokens are stored locally in:
+```
+http://localhost:3000
+```
 
-server/.tokens.json (gitignored)
+---
 
-Playback controls note (important)
+## Project Structure
 
-Spotify playback endpoints require an active device.
-Have Spotify open on your phone/desktop and start playing something once.
-Then the dashboard controls will work.
+```
+spotify-dashboard/
+│
+├── public/        # static assets
+├── views/         # dashboard templates
+├── routes/        # API and auth routes
+├── server.js      # main server file
+├── package.json
+└── .env
+```
 
-Scopes
+---
 
-This app requests:
+## Spotify API Permissions
 
-user-read-currently-playing
+This app may request scopes such as:
 
-user-read-playback-state
+* `user-top-read`
+* `user-read-recently-played`
+* `user-library-read`
 
-user-modify-playback-state
+These allow the dashboard to access listening statistics and track data.
 
-user-top-read
+---
 
-user-read-recently-played
+## Future Improvements
 
-playlist-read-private
+* Dark mode dashboard
+* Playlist analytics
+* Listening history graphs
+* Export statistics
+* Mobile responsive layout
 
-playlist-read-collaborative
+---
 
-If you change scopes later, logout and re-auth.
-# spotify-dashboard
-# spotify-dashboard
+## License
+
+MIT License
+
+---
+
+## Author
+
+Krystian J
+GitHub: https://github.com/sudo13samurai
