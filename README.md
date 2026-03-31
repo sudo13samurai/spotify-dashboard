@@ -9,7 +9,13 @@ This project allows users to log in with their Spotify account and explore detai
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Spotify API](https://img.shields.io/badge/API-Spotify-1DB954)
 ![Status](https://img.shields.io/badge/status-active-success)
+![GitHub stars](https://img.shields.io/github/stars/sudo13samurai/spotify-dashboard)
+![GitHub forks](https://img.shields.io/github/forks/sudo13samurai/spotify-dashboard)
+![GitHub issues](https://img.shields.io/github/issues/sudo13samurai/spotify-dashboard)
 
+## Demo
+
+![Spotify Dashboard Demo](docs/demo.gif)
 
 ## Features
 
