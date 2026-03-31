@@ -15,7 +15,7 @@ This project allows users to log in with their Spotify account and explore detai
 
 ## Demo
 
-![Spotify Dashboard Demo](docs/demo.gif)
+![Spotify Dashboard Demo]
 <p align="center">
   <img src="docs/demo.gif" width="800">
 </p>
