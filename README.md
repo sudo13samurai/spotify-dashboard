@@ -33,7 +33,6 @@ This project allows users to log in with their Spotify account and explore detai
 
 ## Preview
 
-![Dashboard Screenshot](docs/dashboard-preview.png)
 
 ---
 
