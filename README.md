@@ -17,7 +17,6 @@ This project allows users to log in with their Spotify account and explore detai
 
 <p align="center">
   <img src="docs/demo.gif" width="800">
-<a href="https://tildeath.site>tildeath.site</a> 
 </p>
 
 ## Features
